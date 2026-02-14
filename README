@@ -1,0 +1,83 @@
+# E-Kesiswaan API
+
+**E-Kesiswaan API** is a backend service designed to manage student affairs in educational institutions. It provides endpoints for handling student data, attendance, violations, and other related functionalities.
+
+## Roles
+
+The following roles sorted by **most privileged** to **least privileged**:
+
+1. Admin
+2. Guru BK
+3. Kepala Sekolah
+
+## Features of E-Kesiswaan API
+
+- Absensi Dengan Scanner & Fingerprint
+- User Authentication and Authorization (Multi-role Support)
+- Dashboard Statistics
+- Student Data Management
+- Attendance Tracking
+- Violation Reporting and Management
+- Achievement Recording
+- Permission Management
+- Home Visit Tracking
+- Audit Logs
+- Configuration Settings
+
+- Import/Export Excel
+- Export PDF
+
+- Data Search, Filter, & Pagination
+
+- Image Storage Management
+- Database Management
+
+## How to Run
+
+Start by cloning the repository
+
+```bash
+git clone [repo URL]
+```
+
+Install all the required packages
+
+```bash
+npm install
+```
+
+Then run a mysql server you can use either terminal, XAMPP, or Laragon.
+
+Import the `database.example.sql` to your mysql. Then run the following to seed the users table.
+
+```bash
+npm run seed
+```
+
+Finally, run the server using the following command.
+
+```bash
+npm run dev
+```
+
+## Local Hosting
+
+EMPTY
+
+## Upcoming Features:
+
+EMPTY
+
+## TODO (FOR DEVELOPERS):
+
+Improvable Features:
+
+- Duplicate data prevention
+- SECURITY PROTECTION (DDoS, SQL injection)
+- BACKUP and RESTORE database
+- PERFORMANCE OPTIMIZATION (Debounce, Indexing) []
+
+- TAMBAH tahun ajaran siswa
+
+- Make Documentation & Manual
+- MAINTENANCE easy maintenance for non-technical users
