@@ -1,12 +1,34 @@
 import express from "express";
 import dotenv from "dotenv";
 import cookieParser from "cookie-parser";
+import cors from "cors";
 
 import routes from "./routes.js";
 
 dotenv.config();
 
 const app = express();
+
+// ===== Allow CORS from any origin (for development only) ===== //
+const allowedOrigins = [
+  "http://localhost:5500",
+  "http://localhost:5173",
+  "http://localhost:8000",
+  "http://localhost:8080",
+];
+
+app.use(
+  cors({
+    origin: function (origin, callback) {
+      if (!origin || allowedOrigins.includes(origin)) {
+        callback(null, true);
+      } else {
+        callback(new Error("Not allowed by CORS"));
+      }
+    },
+    credentials: true,
+  }),
+);
 
 // ===== Logger ===== //
 app.use((req, res, next) => {

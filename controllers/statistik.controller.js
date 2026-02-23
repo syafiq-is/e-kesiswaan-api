@@ -83,7 +83,7 @@ export const getAllStatistics = async (req, res) => {
        LIMIT 5`,
       [id_tahun_ajaran],
     );
-    n;
+
     res.json({
       total_siswa: totalSiswa[0].total_siswa,
       hadir_hari_ini: hadirHariIni[0].hadir_hari_ini,

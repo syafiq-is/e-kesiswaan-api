@@ -33,27 +33,27 @@ export const getUserById = async (req, res) => {
 /* Create User */
 export const createUser = async (req, res) => {
   try {
-    const { nama, nip, password, role } = req.body;
+    const { nama, username, password, role } = req.body;
 
-    if (!nama || !password || !role) {
+    if (!nama || !username || !password || !role) {
       return res.status(400).json({ message: "Required fields missing" });
     }
 
-    if (!["guru_bk", "kepala_sekolah"].includes(role)) {
+    if (!["guru_bk", "kepala_sekolah", "absensi"].includes(role)) {
       return res.status(400).json({ message: "Invalid role" });
     }
 
     const hashedPassword = await bcrypt.hash(password, 10);
 
     await db.query(
-      "INSERT INTO users (nama, nip, password, role) VALUES (?, ?, ?, ?)",
-      [nama, nip || null, hashedPassword, role],
+      "INSERT INTO users (nama, username, password, role) VALUES (?, ?, ?, ?)",
+      [nama, username, hashedPassword, role],
     );
 
     res.status(201).json({ message: "User created successfully" });
   } catch (err) {
     if (err.code === "ER_DUP_ENTRY") {
-      return res.status(409).json({ message: "NIP already exists" });
+      return res.status(409).json({ message: "Username already exists" });
     }
 
     console.error(err);
@@ -64,9 +64,9 @@ export const createUser = async (req, res) => {
 /* Update User */
 export const updateUser = async (req, res) => {
   try {
-    const { nama, role } = req.body;
+    const { nama, username, role, password } = req.body;
 
-    if (!nama && !role) {
+    if (!nama && !username && !role && !password) {
       return res.status(400).json({ message: "Nothing to update" });
     }
 
@@ -75,10 +75,18 @@ export const updateUser = async (req, res) => {
       UPDATE users 
       SET 
         nama = COALESCE(?, nama),
-        role = COALESCE(?, role)
+        username = COALESCE(?, username),
+        role = COALESCE(?, role),
+        password = COALESCE(?, password)
       WHERE id = ?
       `,
-      [nama || null, role || null, req.params.id],
+      [
+        nama || null,
+        username || null,
+        role || null,
+        password ? await bcrypt.hash(password, 10) : null,
+        req.params.id,
+      ],
     );
 
     if (result.affectedRows === 0) {

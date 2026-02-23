@@ -8,13 +8,17 @@ if (!process.env.JWT_SECRET) {
 
 export const login = async (req, res) => {
   try {
-    const { nip, password, rememberMe } = req.body;
+    const { username, password, rememberMe } = req.body;
 
-    if (!nip || !password) {
-      return res.status(400).json({ message: "NIP and password required" });
+    if (!username || !password) {
+      return res
+        .status(400)
+        .json({ message: "Username and password required" });
     }
 
-    const [rows] = await db.query("SELECT * FROM users WHERE nip = ?", [nip]);
+    const [rows] = await db.query("SELECT * FROM users WHERE username = ?", [
+      username,
+    ]);
 
     if (!rows.length) {
       return res.status(401).json({ message: "Invalid credentials" });
@@ -41,9 +45,10 @@ export const login = async (req, res) => {
 
     // Send token as cookie
     res.cookie("token", token, {
-      httpOnly: true,
-      secure: false, // true in production (HTTPS)
-      maxAge: rememberMe ? 30 * 24 * 60 * 60 * 1000 : 24 * 60 * 60 * 1000,
+      httpOnly: true, // not accessible via JavaScript to prevent XSS
+      secure: true, // true in production (HTTPS)
+      sameSite: "none", // CSRF protection. true in production with secure: true
+      maxAge: rememberMe ? 30 * 24 * 60 * 60 * 1000 : 24 * 60 * 60 * 1000, // 30 days or 1 day
     });
 
     res.json({
@@ -51,6 +56,7 @@ export const login = async (req, res) => {
       user: {
         id: user.id,
         nama: user.nama,
+        username: user.username,
         role: user.role,
       },
     });
