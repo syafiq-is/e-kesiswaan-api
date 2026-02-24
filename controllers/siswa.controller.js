@@ -57,6 +57,8 @@ export const getAllSiswa = async (req, res) => {
         s.nisn,
         s.kelas,
         s.jenis_kelamin,
+        s.tempat_lahir,
+        s.tanggal_lahir,
         s.nama_ayah,
         s.pekerjaan_ayah,
         s.nama_ibu,
@@ -65,6 +67,7 @@ export const getAllSiswa = async (req, res) => {
         s.pekerjaan_wali,
         s.no_telepon,
         s.alamat,
+        s.gambar,
         ta.tahun_ajaran
       FROM siswa s
       JOIN tahun_ajaran ta ON s.id_tahun_ajaran = ta.id

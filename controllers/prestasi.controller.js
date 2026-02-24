@@ -35,7 +35,9 @@ export const getAllPrestasi = async (req, res) => {
       SELECT
         p.id,
         p.nama_lomba,
+        p.penyelenggara,
         p.tanggal,
+        p.keterangan,
         p.kategori,
         p.tingkat,
         p.peringkat,
@@ -106,7 +108,9 @@ export const createPrestasi = async (req, res) => {
     const {
       id_siswa,
       nama_lomba,
+      penyelenggara,
       tanggal,
+      keterangan,
       kategori,
       tingkat,
       peringkat,
@@ -115,7 +119,15 @@ export const createPrestasi = async (req, res) => {
 
     const gambarPath = req.file ? `uploads/${req.file.filename}` : null;
 
-    if (!id_siswa || !nama_lomba || !tanggal || !kategori || !tingkat) {
+    if (
+      !id_siswa ||
+      !nama_lomba ||
+      !penyelenggara ||
+      !tanggal ||
+      !keterangan ||
+      !kategori ||
+      !tingkat
+    ) {
       return res.status(400).json({ message: "Required fields missing" });
     }
 
@@ -147,12 +159,16 @@ export const createPrestasi = async (req, res) => {
     await db.query(
       `
       INSERT INTO prestasi_siswa
-      (id_siswa, nama_lomba, tanggal, kategori, tingkat, peringkat, gambar)
-      VALUES (?, ?, ?, ?, ?, ?, ?)
+      (id_siswa, nama_lomba, penyelenggara, tanggal, keterangan, kategori, tingkat, peringkat, gambar)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
       `,
       [
         id_siswa,
         nama_lomba,
+        penyelenggara,
+        tanggal,
+        keterangan,
+
         tanggal,
         kategori,
         tingkat,
@@ -171,13 +187,22 @@ export const createPrestasi = async (req, res) => {
 /* Update Prestasi by ID */
 export const updatePrestasiById = async (req, res) => {
   try {
-    const { nama_lomba, tanggal, kategori, tingkat, peringkat, gambar } =
-      req.body;
+    const {
+      nama_lomba,
+      penyelenggara,
+      tanggal,
+      keterangan,
+      kategori,
+      tingkat,
+      peringkat,
+      gambar,
+    } = req.body;
 
     const gambarPath = req.file ? `uploads/${req.file.filename}` : null;
 
     if (
       !nama_lomba &&
+      !penyelenggara &&
       !tanggal &&
       !kategori &&
       !tingkat &&
@@ -208,7 +233,9 @@ export const updatePrestasiById = async (req, res) => {
       `
       UPDATE prestasi_siswa SET
         nama_lomba = COALESCE(?, nama_lomba),
+        penyelenggara = COALESCE(?, penyelenggara),
         tanggal = COALESCE(?, tanggal),
+        keterangan = COALESCE(?, keterangan),
         kategori = COALESCE(?, kategori),
         tingkat = COALESCE(?, tingkat),
         peringkat = COALESCE(?, peringkat),
@@ -217,7 +244,9 @@ export const updatePrestasiById = async (req, res) => {
       `,
       [
         nama_lomba || null,
+        penyelenggara || null,
         tanggal || null,
+        keterangan || null,
         kategori || null,
         tingkat || null,
         peringkat || null,

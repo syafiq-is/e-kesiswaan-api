@@ -27,6 +27,7 @@ export const getRekapKehadiran = async (req, res) => {
         s.nisn,
         s.nama,
         s.jenis_kelamin,
+        s.kelas,
 
         COUNT(DISTINCT a.id) AS total_hadir,
 

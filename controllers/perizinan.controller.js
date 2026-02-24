@@ -11,7 +11,8 @@ export const getAllPerizinan = async (req, res) => {
         p.created_at,
         s.id AS id_siswa,
         s.nama AS nama_siswa,
-        s.kelas
+        s.kelas,
+        s.gambar
       FROM perizinan_siswa p
       JOIN siswa s ON s.id = p.id_siswa
       ORDER BY p.created_at DESC

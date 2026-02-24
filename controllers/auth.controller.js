@@ -48,7 +48,6 @@ export const login = async (req, res) => {
       httpOnly: true, // not accessible via JavaScript to prevent XSS
       secure: true, // true in production (HTTPS)
       sameSite: "none", // CSRF protection. true in production with secure: true
-      domain: "localhost", // adjust for production domain
       maxAge: rememberMe ? 30 * 24 * 60 * 60 * 1000 : 24 * 60 * 60 * 1000, // 30 days or 1 day
     });
 

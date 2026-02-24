@@ -70,7 +70,7 @@ export const getAllPelanggaran = async (req, res) => {
       JOIN jenis_pelanggaran jp ON ps.id_jenis_pelanggaran = jp.id
       JOIN tahun_ajaran ta ON s.id_tahun_ajaran = ta.id
       ${whereClause}
-      ORDER BY jp.poin DESC
+      ORDER BY ps.tanggal DESC
       LIMIT ? OFFSET ?
     `;
 
@@ -96,65 +96,65 @@ export const getAllPelanggaran = async (req, res) => {
   }
 };
 
-/* Get All Pelanggaran Siswa */
-export const getAllPelanggaranMaks = async (req, res) => {
+/* Get All Siswa with Total Poin + Riwayat */
+export const getAllTotalPoinSiswa = async (req, res) => {
   try {
     const { page = 1, limit = 10, search } = req.query;
 
     const pageNumber = parseInt(page);
     const limitNumber = parseInt(limit);
     const offset = (pageNumber - 1) * limitNumber;
-    const config = await db.query(
-      `SELECT config_value FROM config WHERE config_key = "maks_poin_pelanggaran"`,
-    );
-    const maksPoinPelanggaran = config[0][0]["config_value"];
 
     let whereClause = "WHERE 1=1";
     const filterValues = [];
 
-    // Search by nama / NISN
     if (search) {
       whereClause += " AND (s.nama LIKE ? OR s.nisn LIKE ?)";
       filterValues.push(`%${search}%`, `%${search}%`);
     }
 
-    // Filter Maks Poin Pelanggaran
-    whereClause += ` AND poin >= ${maksPoinPelanggaran}`;
-
     const countQuery = `
-      SELECT COUNT(*) AS total
-      FROM pelanggaran_siswa ps
-      JOIN siswa s ON ps.id_siswa = s.id
-      JOIN jenis_pelanggaran jp ON ps.id_jenis_pelanggaran = jp.id
-      JOIN tahun_ajaran ta ON s.id_tahun_ajaran = ta.id
-      ${whereClause}
+      SELECT COUNT(*) AS total FROM (
+        SELECT s.id
+        FROM siswa s
+        LEFT JOIN pelanggaran_siswa ps ON ps.id_siswa = s.id
+        LEFT JOIN jenis_pelanggaran jp ON ps.id_jenis_pelanggaran = jp.id
+        ${whereClause}
+        GROUP BY s.id
+      ) AS counted
     `;
 
     const dataQuery = `
       SELECT
-        ps.id,
-        ps.tanggal,
-        ps.keterangan,
+        s.id,
         s.nama AS nama_siswa,
-        s.nama_ayah,
-        s.nama_ibu,
-        s.nama_wali,
-        s.alamat,
-        s.no_telepon,
         s.nisn,
         s.kelas,
-        jp.pelanggaran,
-        jp.poin
-      FROM pelanggaran_siswa ps
-      JOIN siswa s ON ps.id_siswa = s.id
-      JOIN jenis_pelanggaran jp ON ps.id_jenis_pelanggaran = jp.id
-      JOIN tahun_ajaran ta ON s.id_tahun_ajaran = ta.id
+        COALESCE(SUM(jp.poin), 0) AS total_poin,
+
+        JSON_ARRAYAGG(
+          CASE 
+            WHEN ps.id IS NOT NULL THEN
+              JSON_OBJECT(
+                'tanggal', ps.tanggal,
+                'pelanggaran', jp.pelanggaran,
+                'poin', jp.poin,
+                'keterangan', ps.keterangan
+              )
+          END
+        ) AS riwayat_pelanggaran
+
+      FROM siswa s
+      LEFT JOIN pelanggaran_siswa ps ON ps.id_siswa = s.id
+      LEFT JOIN jenis_pelanggaran jp ON ps.id_jenis_pelanggaran = jp.id
       ${whereClause}
-      ORDER BY jp.poin DESC
+      GROUP BY s.id
+      ORDER BY total_poin DESC
       LIMIT ? OFFSET ?
     `;
 
     const [[{ total }]] = await db.query(countQuery, filterValues);
+
     const [rows] = await db.query(dataQuery, [
       ...filterValues,
       limitNumber,

@@ -278,10 +278,10 @@ router.get(
 );
 
 router.get(
-  "/pelanggaran/maks",
+  "/pelanggaran/total",
   authMiddleware,
   requireRole(["admin", "guru_bk", "kepala_sekolah"]),
-  PelanggaranController.getAllPelanggaranMaks,
+  PelanggaranController.getAllTotalPoinSiswa,
 );
 
 router.get(
