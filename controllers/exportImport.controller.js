@@ -99,6 +99,7 @@ const usePDFTemplate = (data) => {
   return html;
 };
 
+/* Export Excel Functions */
 export const exportAbsensiExcel = async (req, res) => {
   try {
     const [rows] = await db.query(`
@@ -253,7 +254,6 @@ export const exportPrestasiExcel = async (req, res) => {
   }
 };
 
-/* Export Siswa to Excel */
 export const exportSiswaExcel = async (req, res) => {
   try {
     const { id_tahun_ajaran } = req.query;
@@ -262,11 +262,10 @@ export const exportSiswaExcel = async (req, res) => {
       return res.status(400).json({ message: "id_tahun_ajaran is required" });
     }
 
-    // Fetch data
     const [rows] = await db.query(
       `SELECT 
-        id,
         nama,
+        nis,
         nisn,
         kelas,
         jenis_kelamin,
@@ -281,9 +280,10 @@ export const exportSiswaExcel = async (req, res) => {
         pekerjaan_wali,
         no_telepon,
         penghasilan_orang_tua,
-        created_at
-       FROM siswa
-       WHERE id_tahun_ajaran = ?`,
+        ta.tahun_ajaran
+      FROM siswa s
+      JOIN tahun_ajaran ta ON s.id_tahun_ajaran = ta.id
+      WHERE id_tahun_ajaran = ?`,
       [id_tahun_ajaran],
     );
 
@@ -293,8 +293,8 @@ export const exportSiswaExcel = async (req, res) => {
 
     // Define columns
     worksheet.columns = [
-      { header: "ID", key: "id", width: 8 },
       { header: "Nama", key: "nama", width: 25 },
+      { header: "NIS", key: "nis", width: 15 }, // 🔥 ADD THIS
       { header: "NISN", key: "nisn", width: 15 },
       { header: "Kelas", key: "kelas", width: 10 },
       { header: "Jenis Kelamin", key: "jenis_kelamin", width: 15 },
@@ -313,7 +313,7 @@ export const exportSiswaExcel = async (req, res) => {
         key: "penghasilan_orang_tua",
         width: 20,
       },
-      { header: "Created At", key: "created_at", width: 20 },
+      { header: "Tahun Ajaran", key: "tahun_ajaran", width: 15 },
     ];
 
     // Add rows
@@ -342,6 +342,57 @@ export const exportSiswaExcel = async (req, res) => {
   }
 };
 
+export const exportSiswaExcelTemplate = async (req, res) => {
+  try {
+    const workbook = new ExcelJS.Workbook();
+    const worksheet = workbook.addWorksheet("Template Data Siswa");
+
+    worksheet.columns = [
+      { header: "Nama", key: "nama", width: 25 },
+      { header: "NIS", key: "nis", width: 15 },
+      { header: "NISN", key: "nisn", width: 15 },
+      { header: "Kelas", key: "kelas", width: 15 },
+      { header: "Jenis Kelamin (L/P)", key: "jenis_kelamin", width: 20 },
+      { header: "Tempat Lahir", key: "tempat_lahir", width: 20 },
+      { header: "Tanggal Lahir (YYYY-MM-DD)", key: "tanggal_lahir", width: 22 },
+      { header: "Alamat", key: "alamat", width: 30 },
+      { header: "Nama Ayah", key: "nama_ayah", width: 20 },
+      { header: "Pekerjaan Ayah", key: "pekerjaan_ayah", width: 20 },
+      { header: "Nama Ibu", key: "nama_ibu", width: 20 },
+      { header: "Pekerjaan Ibu", key: "pekerjaan_ibu", width: 20 },
+      { header: "Nama Wali", key: "nama_wali", width: 20 },
+      { header: "Pekerjaan Wali", key: "pekerjaan_wali", width: 20 },
+      { header: "No Telepon", key: "no_telepon", width: 18 },
+      {
+        header: "Penghasilan Orang Tua",
+        key: "penghasilan_orang_tua",
+        width: 22,
+      },
+      { header: "Tahun Ajaran", key: "tahun_ajaran", width: 15 },
+    ];
+
+    // Make header bold
+    worksheet.getRow(1).font = { bold: true };
+
+    // Send file
+    res.setHeader(
+      "Content-Type",
+      "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    );
+    res.setHeader(
+      "Content-Disposition",
+      "attachment; filename=template_data_siswa.xlsx",
+    );
+
+    await workbook.xlsx.write(res);
+    res.end();
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: "Server error" });
+  }
+};
+
+/* Export PDF Functions */
 export const exportAbsensiPDF = async (req, res) => {
   try {
     const [rows] = await db.query(`
@@ -358,7 +409,7 @@ export const exportAbsensiPDF = async (req, res) => {
       ORDER BY a.created_at DESC
     `);
 
-    const html = `
+    const html = usePDFTemplate(`
       <h2 style="text-align:center;">DATA ABSENSI</h2>
       <table border="1" cellspacing="0" cellpadding="4" width="100%">
         <tr>
@@ -386,7 +437,7 @@ export const exportAbsensiPDF = async (req, res) => {
           )
           .join("")}
       </table>
-    `;
+    `);
 
     const browser = await puppeteer.launch({ headless: "new" });
     const page = await browser.newPage();
@@ -424,7 +475,7 @@ export const exportPelanggaranPDF = async (req, res) => {
       ORDER BY jp.poin DESC
     `);
 
-    const html = `
+    const html = usePDFTemplate(`
       <h2 style="text-align:center;">DATA PELANGGARAN</h2>
       <table border="1" cellspacing="0" cellpadding="4" width="100%">
         <tr>
@@ -454,13 +505,13 @@ export const exportPelanggaranPDF = async (req, res) => {
           )
           .join("")}
       </table>
-    `;
+    `);
 
     const browser = await puppeteer.launch({ headless: "new" });
     const page = await browser.newPage();
     await page.setContent(html);
 
-    const pdf = await page.pdf({ format: "A4", landscape: true });
+    const pdf = await page.pdf({ format: "A4", landscape: false });
     await browser.close();
 
     res.set({
@@ -493,7 +544,7 @@ export const exportPrestasiPDF = async (req, res) => {
       ORDER BY p.tanggal DESC
     `);
 
-    const html = `
+    const html = usePDFTemplate(`
       <h2 style="text-align:center;">DATA PRESTASI</h2>
       <table border="1" cellspacing="0" cellpadding="4" width="100%">
         <tr>
@@ -525,13 +576,13 @@ export const exportPrestasiPDF = async (req, res) => {
           )
           .join("")}
       </table>
-    `;
+    `);
 
     const browser = await puppeteer.launch({ headless: "new" });
     const page = await browser.newPage();
     await page.setContent(html);
 
-    const pdf = await page.pdf({ format: "A4", landscape: true });
+    const pdf = await page.pdf({ format: "A4", landscape: false });
     await browser.close();
 
     res.set({
@@ -546,20 +597,116 @@ export const exportPrestasiPDF = async (req, res) => {
   }
 };
 
-/* Export Siswa to Excel */
-export const exportSiswaPDF = async (req, res) => {
-  try {
-    const { id_tahun_ajaran } = req.query;
+/* Import Functions */
+export const importSiswaExcel = async (req, res) => {
+  const connection = await db.getConnection();
 
-    if (!id_tahun_ajaran) {
-      return res.status(400).json({ message: "id_tahun_ajaran is required" });
+  try {
+    if (!req.file) {
+      return res.status(400).json({ message: "Excel file is required" });
     }
 
-    // Fetch data
-    const [rows] = await db.query(
-      `SELECT 
-        id,
+    const workbook = new ExcelJS.Workbook();
+    await workbook.xlsx.load(req.file.buffer);
+    const worksheet = workbook.getWorksheet(1);
+
+    const dataToInsert = [];
+    const errors = [];
+    const nisSet = new Set();
+    const nisnSet = new Set();
+    const tahunAjaranCache = new Map();
+
+    const rows = worksheet.getRows(2, worksheet.rowCount - 1);
+
+    for (let i = 0; i < rows.length; i++) {
+      const rowNumber = i + 2;
+      const v = rows[i].values;
+
+      if (!v || v.length <= 1) continue;
+
+      const nama = v[1]?.toString().trim();
+      const nis = v[2]?.toString().trim();
+      const nisn = v[3]?.toString().trim();
+      const kelas = v[4]?.toString().trim();
+      const jenis_kelamin = v[5]?.toString().trim();
+      const tempat_lahir = v[6]?.toString().trim() || null;
+      const tanggal_lahir = v[7] || null;
+      const alamat = v[8]?.toString().trim() || null;
+      const nama_ayah = v[9]?.toString().trim() || null;
+      const pekerjaan_ayah = v[10]?.toString().trim() || null;
+      const nama_ibu = v[11]?.toString().trim() || null;
+      const pekerjaan_ibu = v[12]?.toString().trim() || null;
+      const nama_wali = v[13]?.toString().trim() || null;
+      const pekerjaan_wali = v[14]?.toString().trim() || null;
+      const no_telepon = v[15]?.toString().trim() || null;
+      const penghasilan_orang_tua = v[16] || 0;
+      const tahun_ajaran_nama = v[17]?.toString().trim();
+
+      // ===== REQUIRED VALIDATION =====
+      if (
+        !nama ||
+        !nis ||
+        !nisn ||
+        !kelas ||
+        !jenis_kelamin ||
+        !tahun_ajaran_nama
+      ) {
+        errors.push(`Row ${rowNumber}: Required fields missing`);
+        continue;
+      }
+
+      if (!["L", "P"].includes(jenis_kelamin)) {
+        errors.push(`Row ${rowNumber}: Jenis Kelamin must be L or P`);
+        continue;
+      }
+
+      if (!/^\d+$/.test(nis)) {
+        errors.push(`Row ${rowNumber}: NIS must be numeric`);
+        continue;
+      }
+
+      if (!/^\d+$/.test(nisn)) {
+        errors.push(`Row ${rowNumber}: NISN must be numeric`);
+        continue;
+      }
+
+      if (nisSet.has(nis)) {
+        errors.push(`Row ${rowNumber}: Duplicate NIS in file`);
+        continue;
+      }
+
+      if (nisnSet.has(nisn)) {
+        errors.push(`Row ${rowNumber}: Duplicate NISN in file`);
+        continue;
+      }
+
+      nisSet.add(nis);
+      nisnSet.add(nisn);
+
+      // ===== VALIDATE TAHUN AJARAN =====
+      let id_tahun_ajaran;
+
+      if (tahunAjaranCache.has(tahun_ajaran_nama)) {
+        id_tahun_ajaran = tahunAjaranCache.get(tahun_ajaran_nama);
+      } else {
+        const [tahunRows] = await connection.query(
+          "SELECT id FROM tahun_ajaran WHERE tahun_ajaran = ?",
+          [tahun_ajaran_nama],
+        );
+
+        if (tahunRows.length === 0) {
+          errors.push(`Row ${rowNumber}: Tahun Ajaran not found`);
+          continue;
+        }
+
+        id_tahun_ajaran = tahunRows[0].id;
+        tahunAjaranCache.set(tahun_ajaran_nama, id_tahun_ajaran);
+      }
+
+      dataToInsert.push([
+        id_tahun_ajaran,
         nama,
+        nis,
         nisn,
         kelas,
         jenis_kelamin,
@@ -574,56 +721,70 @@ export const exportSiswaPDF = async (req, res) => {
         pekerjaan_wali,
         no_telepon,
         penghasilan_orang_tua,
-        created_at
-       FROM siswa
-       WHERE id_tahun_ajaran = ?`,
-      [id_tahun_ajaran],
+      ]);
+    }
+
+    if (errors.length > 0) {
+      return res.status(400).json({
+        message: "Validation failed",
+        errors,
+      });
+    }
+
+    if (dataToInsert.length === 0) {
+      return res.status(400).json({ message: "No valid data found" });
+    }
+
+    // DB duplicate check
+    const [existing] = await connection.query(
+      `SELECT nis, nisn FROM siswa 
+       WHERE nis IN (?) OR nisn IN (?)`,
+      [[...nisSet], [...nisnSet]],
     );
 
-    const html = usePDFTemplate(
-      `<table>
-        <thead>
-          <tr>
-            <th>WAKTU DATANG</th>
-            <th>NISN</th>
-            <th>NAMA SISWA</th>
-            <th>KELAS</th>
-            <th>STATUS</th>
-          </tr>
-        </thead>
-        <tbody>
-          ${rows
-            .map(
-              (row) => `
-            <tr>
-              <td>${row.waktu}</td>
-              <td>${row.nisn}</td>
-              <td>${row.nama}</td>
-              <td>${row.kelas}</td>
-              <td>${row.status}</td>
-            </tr>
-          `,
-            )
-            .join("")}
-        </tbody>
-      </table>`,
+    if (existing.length > 0) {
+      return res.status(400).json({
+        message: "Duplicate NIS/NISN found in database",
+        duplicates: existing,
+      });
+    }
+
+    await connection.beginTransaction();
+
+    await connection.query(
+      `INSERT INTO siswa (
+        id_tahun_ajaran,
+        nama,
+        nis,
+        nisn,
+        kelas,
+        jenis_kelamin,
+        tempat_lahir,
+        tanggal_lahir,
+        alamat,
+        nama_ayah,
+        pekerjaan_ayah,
+        nama_ibu,
+        pekerjaan_ibu,
+        nama_wali,
+        pekerjaan_wali,
+        no_telepon,
+        penghasilan_orang_tua
+      ) VALUES ?`,
+      [dataToInsert],
     );
 
-    const browser = await puppeteer.launch();
-    const page = await browser.newPage();
-    await page.setContent(html);
+    await connection.commit();
 
-    const pdf = await page.pdf({ format: "A4" });
-    await browser.close();
-
-    res.set({
-      "Content-Type": "application/pdf",
-      "Content-Disposition": "attachment; filename=rekap_siswa.pdf",
+    res.json({
+      message: "Import successful",
+      total_inserted: dataToInsert.length,
     });
-
-    res.send(pdf);
   } catch (error) {
+    await connection.rollback();
     console.error(error);
     res.status(500).json({ message: "Server error" });
+  } finally {
+    connection.release();
   }
 };

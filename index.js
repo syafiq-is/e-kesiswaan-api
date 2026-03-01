@@ -11,6 +11,7 @@ const app = express();
 
 // ===== Allow CORS from any origin (for development only) ===== //
 const allowedOrigins = [
+  "http://localhost",
   "http://localhost:5500",
   "http://localhost:5173",
   "http://localhost:8000",

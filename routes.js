@@ -1,6 +1,6 @@
 // Import Libraries
 import express from "express";
-import { upload } from "./lib/storage.js";
+import { upload, uploadImg } from "./lib/storage.js";
 
 // Import Middlewares
 import authMiddleware from "./middleware/auth.middleware.js";
@@ -435,26 +435,62 @@ router.patch(
 );
 
 /* ===== Export Import Routes ===== */
-router.get("/export/absensi/excel", ExportImportController.exportAbsensiExcel);
+router.get(
+  "/export/absensi/excel",
+  authMiddleware,
+  requireRole(["admin", "guru_bk"]),
+  ExportImportController.exportAbsensiExcel,
+);
 router.get(
   "/export/pelanggaran/excel",
+  authMiddleware,
+  requireRole(["admin", "guru_bk"]),
   ExportImportController.exportPelanggaranExcel,
 );
 router.get(
   "/export/prestasi/excel",
+  authMiddleware,
+  requireRole(["admin", "guru_bk"]),
   ExportImportController.exportPrestasiExcel,
 );
 
-router.get("/export/absensi/pdf", ExportImportController.exportAbsensiPDF);
+router.get(
+  "/export/absensi/pdf",
+  authMiddleware,
+  requireRole(["admin", "guru_bk"]),
+  ExportImportController.exportAbsensiPDF,
+);
 router.get(
   "/export/pelanggaran/pdf",
+  authMiddleware,
+  requireRole(["admin", "guru_bk"]),
   ExportImportController.exportPelanggaranPDF,
 );
-router.get("/export/prestasi/pdf", ExportImportController.exportPrestasiPDF);
+router.get(
+  "/export/prestasi/pdf",
+  authMiddleware,
+  requireRole(["admin", "guru_bk"]),
+  ExportImportController.exportPrestasiPDF,
+);
 
-// router.get("/import/siswa/excel", ExportImportController.exportSiswaExcel);
-// router.get("/export/siswa/excel-template", ExportImportController.exportSiswaExcel);
-router.get("/export/siswa/excel", ExportImportController.exportSiswaExcel);
-router.get("/export/siswa/pdf", ExportImportController.exportSiswaPDF);
+router.post(
+  "/import/siswa/excel",
+  authMiddleware,
+  requireRole(["admin", "guru_bk"]),
+  uploadImg.single("file"),
+  ExportImportController.importSiswaExcel,
+);
+router.get(
+  "/export/siswa/excel-template",
+  authMiddleware,
+  requireRole(["admin", "guru_bk"]),
+  ExportImportController.exportSiswaExcelTemplate,
+);
+router.get(
+  "/export/siswa/excel",
+  authMiddleware,
+  requireRole(["admin", "guru_bk"]),
+  ExportImportController.exportSiswaExcel,
+);
 
 export default router;
