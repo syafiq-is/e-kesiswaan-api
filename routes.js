@@ -439,7 +439,7 @@ router.get(
   "/export/absensi/excel",
   authMiddleware,
   requireRole(["admin", "guru_bk"]),
-  ExportImportController.exportAbsensiExcel,
+  ExportImportController.exportRekapKehadiranExcel,
 );
 router.get(
   "/export/pelanggaran/excel",
@@ -458,7 +458,7 @@ router.get(
   "/export/absensi/pdf",
   authMiddleware,
   requireRole(["admin", "guru_bk"]),
-  ExportImportController.exportAbsensiPDF,
+  ExportImportController.exportRekapKehadiranPDF,
 );
 router.get(
   "/export/pelanggaran/pdf",

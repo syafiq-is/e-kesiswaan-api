@@ -100,32 +100,49 @@ const usePDFTemplate = (data) => {
 };
 
 /* Export Excel Functions */
-export const exportAbsensiExcel = async (req, res) => {
+export const exportRekapKehadiranExcel = async (req, res) => {
   try {
     const [rows] = await db.query(`
-      SELECT 
-        a.created_at,
-        s.nama,
+      SELECT
         s.nisn,
+        s.nama,
+        s.jenis_kelamin,
         s.kelas,
-        ta.tahun_ajaran,
-        ta.semester
-      FROM absensi a
-      JOIN siswa s ON a.id_siswa = s.id
-      JOIN tahun_ajaran ta ON a.id_tahun_ajaran = ta.id
-      ORDER BY a.created_at DESC
+
+        COUNT(DISTINCT a.id) AS total_hadir,
+
+        SUM(CASE WHEN ps.status = 'izin' THEN 1 ELSE 0 END) AS total_izin,
+        SUM(CASE WHEN ps.status = 'sakit' THEN 1 ELSE 0 END) AS total_sakit,
+        SUM(CASE WHEN ps.status = 'alpha' THEN 1 ELSE 0 END) AS total_alpha,
+
+        SUM(
+          CASE
+            WHEN a.id IS NOT NULL AND TIME(a.created_at) > '07:00:00'
+            THEN 1
+            ELSE 0
+          END
+        ) AS total_terlambat
+
+      FROM siswa s
+      LEFT JOIN absensi a ON a.id_siswa = s.id
+      LEFT JOIN perizinan_siswa ps ON ps.id_siswa = s.id
+      GROUP BY s.id
+      ORDER BY s.nisn ASC;
     `);
 
     const workbook = new ExcelJS.Workbook();
     const worksheet = workbook.addWorksheet("Data Absensi");
 
     worksheet.columns = [
-      { header: "Tanggal", key: "created_at", width: 20 },
-      { header: "Nama", key: "nama", width: 25 },
       { header: "NISN", key: "nisn", width: 20 },
+      { header: "Nama", key: "nama", width: 25 },
+      { header: "Jenis Kelamin", key: "jenis_kelamin", width: 15 },
       { header: "Kelas", key: "kelas", width: 10 },
-      { header: "Tahun Ajaran", key: "tahun_ajaran", width: 15 },
-      { header: "Semester", key: "semester", width: 10 },
+      { header: "Total Hadir", key: "total_hadir", width: 15 },
+      { header: "Total Izin", key: "total_izin", width: 15 },
+      { header: "Total Sakit", key: "total_sakit", width: 15 },
+      { header: "Total Alpha", key: "total_alpha", width: 15 },
+      { header: "Total Terlambat", key: "total_terlambat", width: 15 },
     ];
 
     rows.forEach((row) => worksheet.addRow(row));
@@ -142,7 +159,7 @@ export const exportAbsensiExcel = async (req, res) => {
 
     await workbook.xlsx.write(res);
     res.end();
-  } catch (error) {
+  } catch (err) {
     console.error(error);
     res.status(500).json({ message: "Server error" });
   }
@@ -393,45 +410,65 @@ export const exportSiswaExcelTemplate = async (req, res) => {
 };
 
 /* Export PDF Functions */
-export const exportAbsensiPDF = async (req, res) => {
+export const exportRekapKehadiranPDF = async (req, res) => {
   try {
     const [rows] = await db.query(`
-      SELECT 
-        a.created_at,
-        s.nama,
+      SELECT
         s.nisn,
+        s.nama,
+        s.jenis_kelamin,
         s.kelas,
-        ta.tahun_ajaran,
-        ta.semester
-      FROM absensi a
-      JOIN siswa s ON a.id_siswa = s.id
-      JOIN tahun_ajaran ta ON a.id_tahun_ajaran = ta.id
-      ORDER BY a.created_at DESC
+
+        COUNT(DISTINCT a.id) AS total_hadir,
+
+        SUM(CASE WHEN ps.status = 'izin' THEN 1 ELSE 0 END) AS total_izin,
+        SUM(CASE WHEN ps.status = 'sakit' THEN 1 ELSE 0 END) AS total_sakit,
+        SUM(CASE WHEN ps.status = 'alpha' THEN 1 ELSE 0 END) AS total_alpha,
+
+        SUM(
+          CASE
+            WHEN a.id IS NOT NULL AND TIME(a.created_at) > '07:00:00'
+            THEN 1
+            ELSE 0
+          END
+        ) AS total_terlambat
+
+      FROM siswa s
+      LEFT JOIN absensi a ON a.id_siswa = s.id
+      LEFT JOIN perizinan_siswa ps ON ps.id_siswa = s.id
+      GROUP BY s.id
+      ORDER BY s.nisn ASC;
     `);
 
     const html = usePDFTemplate(`
-      <h2 style="text-align:center;">DATA ABSENSI</h2>
+      <h2 style="text-align:center;">DATA REKAP KEHADIRAN</h2>
       <table border="1" cellspacing="0" cellpadding="4" width="100%">
         <tr>
           <th>No</th>
-          <th>Tanggal</th>
-          <th>Nama</th>
           <th>NISN</th>
+          <th>Nama</th>
+          <th>Jenis Kelamin</th>
           <th>Kelas</th>
-          <th>Tahun Ajaran</th>
-          <th>Semester</th>
+          <th>Total Hadir</th>
+          <th>Total Izin</th>
+          <th>Total Sakit</th>
+          <th>Total Alpha</th>
+          <th>Total Terlambat</th>
         </tr>
         ${rows
           .map(
             (r, i) => `
           <tr>
             <td>${i + 1}</td>
-            <td>${r.created_at}</td>
-            <td>${r.nama}</td>
             <td>${r.nisn}</td>
+            <td>${r.nama}</td>
+            <td>${r.jenis_kelamin}</td>
             <td>${r.kelas}</td>
-            <td>${r.tahun_ajaran}</td>
-            <td>${r.semester}</td>
+            <td>${r.total_hadir}</td>
+            <td>${r.total_izin}</td>
+            <td>${r.total_sakit}</td>
+            <td>${r.total_alpha}</td>
+            <td>${r.total_terlambat}</td>
           </tr>
         `,
           )
@@ -443,17 +480,17 @@ export const exportAbsensiPDF = async (req, res) => {
     const page = await browser.newPage();
     await page.setContent(html);
 
-    const pdf = await page.pdf({ format: "A4" });
+    const pdf = await page.pdf({ format: "A4", landscape: false });
     await browser.close();
 
     res.set({
       "Content-Type": "application/pdf",
-      "Content-Disposition": "attachment; filename=data_absensi.pdf",
+      "Content-Disposition": "attachment; filename=data_pelanggaran.pdf",
     });
 
     res.send(pdf);
   } catch (err) {
-    console.error(err);
+    console.error(error);
     res.status(500).json({ message: "Server error" });
   }
 };
