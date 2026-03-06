@@ -3,7 +3,7 @@ import db from "../lib/database.js";
 /* Get All Home Visit */
 export const getAllHomeVisit = async (req, res) => {
   try {
-    const { page = 1, limit = 10, kelas } = req.query;
+    const { page = 1, limit = 10, tahun_ajaran, semester, kelas } = req.query;
 
     const pageNumber = parseInt(page);
     const limitNumber = parseInt(limit);
@@ -11,6 +11,17 @@ export const getAllHomeVisit = async (req, res) => {
 
     let whereClause = "WHERE 1=1";
     const filterValues = [];
+
+    // Filter tahun ajaran & semester
+    if (tahun_ajaran) {
+      whereClause += " AND ta.tahun_ajaran = ?";
+      filterValues.push(tahun_ajaran);
+
+      if (semester) {
+        whereClause += " AND ta.semester = ?";
+        filterValues.push(semester);
+      }
+    }
 
     // Filter by kelas
     if (kelas) {
@@ -22,6 +33,7 @@ export const getAllHomeVisit = async (req, res) => {
       SELECT COUNT(*) AS total
       FROM home_visit hv
       JOIN siswa s ON s.id = hv.id_siswa
+      JOIN tahun_ajaran ta ON s.id_tahun_ajaran = ta.id
       ${whereClause}
     `;
 
@@ -36,6 +48,7 @@ export const getAllHomeVisit = async (req, res) => {
         s.kelas
       FROM home_visit hv
       JOIN siswa s ON s.id = hv.id_siswa
+      JOIN tahun_ajaran ta ON s.id_tahun_ajaran = ta.id
       ${whereClause}
       ORDER BY hv.created_at DESC
       LIMIT ? OFFSET ?

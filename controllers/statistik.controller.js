@@ -147,82 +147,65 @@ export const getRekapKehadiran = async (req, res) => {
 
     switch (type) {
       case "weekly":
-        dateConditionAbsensi = `
-          YEARWEEK(a.created_at, 1) = YEARWEEK(CURDATE(), 1)
-        `;
-        dateConditionPerizinan = `
-          YEARWEEK(p.tanggal, 1) = YEARWEEK(CURDATE(), 1)
-        `;
+        dateConditionAbsensi = `YEARWEEK(a.created_at,1)=YEARWEEK(CURDATE(),1)`;
+        dateConditionPerizinan = `YEARWEEK(p.tanggal,1)=YEARWEEK(CURDATE(),1)`;
         break;
 
       case "monthly":
         dateConditionAbsensi = `
-          YEAR(a.created_at) = YEAR(CURDATE())
-          AND MONTH(a.created_at) = MONTH(CURDATE())
+          YEAR(a.created_at)=YEAR(CURDATE())
+          AND MONTH(a.created_at)=MONTH(CURDATE())
         `;
         dateConditionPerizinan = `
-          YEAR(p.tanggal) = YEAR(CURDATE())
-          AND MONTH(p.tanggal) = MONTH(CURDATE())
+          YEAR(p.tanggal)=YEAR(CURDATE())
+          AND MONTH(p.tanggal)=MONTH(CURDATE())
         `;
         break;
 
-      default: // daily
-        dateConditionAbsensi = `DATE(a.created_at) = CURDATE()`;
-        dateConditionPerizinan = `p.tanggal = CURDATE()`;
+      default:
+        dateConditionAbsensi = `DATE(a.created_at)=CURDATE()`;
+        dateConditionPerizinan = `p.tanggal=CURDATE()`;
     }
 
     const query = `
       SELECT
-        -- HADIR
-        (
-          SELECT COUNT(*)
-          FROM absensi a
-          JOIN siswa s ON a.id_siswa = s.id
-          WHERE s.id_tahun_ajaran = ?
-          AND ${dateConditionAbsensi}
-        ) AS hadir,
+        LEFT(s.kelas,1) AS tingkat,
 
-        -- IZIN
-        (
-          SELECT COUNT(*)
-          FROM perizinan_siswa p
-          JOIN siswa s ON p.id_siswa = s.id
-          WHERE s.id_tahun_ajaran = ?
-          AND p.status = 'izin'
-          AND ${dateConditionPerizinan}
-        ) AS izin,
+        COUNT(DISTINCT CASE
+          WHEN ${dateConditionAbsensi} THEN a.id
+        END) AS hadir,
 
-        -- SAKIT
-        (
-          SELECT COUNT(*)
-          FROM perizinan_siswa p
-          JOIN siswa s ON p.id_siswa = s.id
-          WHERE s.id_tahun_ajaran = ?
-          AND p.status = 'sakit'
-          AND ${dateConditionPerizinan}
-        ) AS sakit,
+        SUM(CASE
+          WHEN p.status='izin' AND ${dateConditionPerizinan} THEN 1
+          ELSE 0
+        END) AS izin,
 
-        -- ALPHA
-        (
-          SELECT COUNT(*)
-          FROM perizinan_siswa p
-          JOIN siswa s ON p.id_siswa = s.id
-          WHERE s.id_tahun_ajaran = ?
-          AND p.status = 'alpha'
-          AND ${dateConditionPerizinan}
-        ) AS alpha
+        SUM(CASE
+          WHEN p.status='sakit' AND ${dateConditionPerizinan} THEN 1
+          ELSE 0
+        END) AS sakit,
+
+        SUM(CASE
+          WHEN p.status='alpha' AND ${dateConditionPerizinan} THEN 1
+          ELSE 0
+        END) AS alpha
+
+      FROM siswa s
+      LEFT JOIN absensi a
+        ON a.id_siswa = s.id
+      LEFT JOIN perizinan_siswa p
+        ON p.id_siswa = s.id
+
+      WHERE s.id_tahun_ajaran = ?
+
+      GROUP BY tingkat
+      ORDER BY tingkat
     `;
 
-    const [[result]] = await db.query(query, [
-      id_tahun_ajaran,
-      id_tahun_ajaran,
-      id_tahun_ajaran,
-      id_tahun_ajaran,
-    ]);
+    const [rows] = await db.query(query, [id_tahun_ajaran]);
 
     return res.json({
-      type,
-      data: result,
+      tingkat: rows,
     });
   } catch (err) {
     console.error(err);

@@ -3,7 +3,24 @@ import db from "../lib/database.js";
 /* Get All Perizinan Siswa */
 export const getAllPerizinan = async (req, res) => {
   try {
-    const [rows] = await db.query(`
+    const { tahun_ajaran, semester } = req.query;
+
+    let whereClause = "WHERE 1=1";
+    const filterValues = [];
+
+    // Filter tahun ajaran & semester
+    if (tahun_ajaran) {
+      whereClause += " AND ta.tahun_ajaran = ?";
+      filterValues.push(tahun_ajaran);
+
+      if (semester) {
+        whereClause += " AND ta.semester = ?";
+        filterValues.push(semester);
+      }
+    }
+
+    const [rows] = await db.query(
+      `
       SELECT 
         p.id,
         p.status,
@@ -15,8 +32,12 @@ export const getAllPerizinan = async (req, res) => {
         s.gambar
       FROM perizinan_siswa p
       JOIN siswa s ON s.id = p.id_siswa
+      JOIN tahun_ajaran ta ON s.id_tahun_ajaran = ta.id
+      ${whereClause}
       ORDER BY p.created_at DESC
-    `);
+    `,
+      filterValues,
+    );
 
     res.json(rows);
   } catch (err) {

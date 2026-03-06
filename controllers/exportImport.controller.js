@@ -102,7 +102,30 @@ const usePDFTemplate = (data) => {
 /* Export Excel Functions */
 export const exportRekapKehadiranExcel = async (req, res) => {
   try {
-    const [rows] = await db.query(`
+    const { tahun_ajaran, semester, kelas } = req.query;
+
+    let whereClause = "WHERE 1=1";
+    const filterValues = [];
+
+    // Filter tahun ajaran & semester
+    if (tahun_ajaran) {
+      whereClause += " AND ta.tahun_ajaran = ?";
+      filterValues.push(tahun_ajaran);
+
+      if (semester) {
+        whereClause += " AND ta.semester = ?";
+        filterValues.push(semester);
+      }
+    }
+
+    // Filter kelas
+    if (kelas) {
+      whereClause += " AND s.kelas = ?";
+      filterValues.push(kelas);
+    }
+
+    const [rows] = await db.query(
+      `
       SELECT
         s.nisn,
         s.nama,
@@ -124,11 +147,15 @@ export const exportRekapKehadiranExcel = async (req, res) => {
         ) AS total_terlambat
 
       FROM siswa s
+      JOIN tahun_ajaran ta ON s.id_tahun_ajaran = ta.id
       LEFT JOIN absensi a ON a.id_siswa = s.id
       LEFT JOIN perizinan_siswa ps ON ps.id_siswa = s.id
+      ${whereClause}
       GROUP BY s.id
-      ORDER BY s.nisn ASC;
-    `);
+      ORDER BY s.kelas ASC;
+    `,
+      filterValues,
+    );
 
     const workbook = new ExcelJS.Workbook();
     const worksheet = workbook.addWorksheet("Data Absensi");
@@ -167,7 +194,30 @@ export const exportRekapKehadiranExcel = async (req, res) => {
 
 export const exportPelanggaranExcel = async (req, res) => {
   try {
-    const [rows] = await db.query(`
+    const { tahun_ajaran, semester, kelas } = req.query;
+
+    let whereClause = "WHERE 1=1";
+    const filterValues = [];
+
+    // Filter tahun ajaran & semester
+    if (tahun_ajaran) {
+      whereClause += " AND ta.tahun_ajaran = ?";
+      filterValues.push(tahun_ajaran);
+
+      if (semester) {
+        whereClause += " AND ta.semester = ?";
+        filterValues.push(semester);
+      }
+    }
+
+    // Filter kelas
+    if (kelas) {
+      whereClause += " AND s.kelas = ?";
+      filterValues.push(kelas);
+    }
+
+    const [rows] = await db.query(
+      `
       SELECT
         ps.tanggal,
         ps.keterangan,
@@ -181,10 +231,14 @@ export const exportPelanggaranExcel = async (req, res) => {
         jp.pelanggaran,
         jp.poin
       FROM pelanggaran_siswa ps
+      JOIN tahun_ajaran ta ON s.id_tahun_ajaran = ta.id
       JOIN siswa s ON ps.id_siswa = s.id
       JOIN jenis_pelanggaran jp ON ps.id_jenis_pelanggaran = jp.id
+      ${whereClause}
       ORDER BY jp.poin DESC
-    `);
+    `,
+      filterValues,
+    );
 
     const workbook = new ExcelJS.Workbook();
     const worksheet = workbook.addWorksheet("Data Pelanggaran");
@@ -221,7 +275,30 @@ export const exportPelanggaranExcel = async (req, res) => {
 
 export const exportPrestasiExcel = async (req, res) => {
   try {
-    const [rows] = await db.query(`
+    const { tahun_ajaran, semester, kelas } = req.query;
+
+    let whereClause = "WHERE 1=1";
+    const filterValues = [];
+
+    // Filter tahun ajaran & semester
+    if (tahun_ajaran) {
+      whereClause += " AND ta.tahun_ajaran = ?";
+      filterValues.push(tahun_ajaran);
+
+      if (semester) {
+        whereClause += " AND ta.semester = ?";
+        filterValues.push(semester);
+      }
+    }
+
+    // Filter kelas
+    if (kelas) {
+      whereClause += " AND s.kelas = ?";
+      filterValues.push(kelas);
+    }
+
+    const [rows] = await db.query(
+      `
       SELECT
         p.nama_lomba,
         p.tanggal,
@@ -234,8 +311,11 @@ export const exportPrestasiExcel = async (req, res) => {
       FROM prestasi_siswa p
       JOIN siswa s ON p.id_siswa = s.id
       JOIN tahun_ajaran ta ON s.id_tahun_ajaran = ta.id
+      ${whereClause}
       ORDER BY p.tanggal DESC
-    `);
+    `,
+      filterValues,
+    );
 
     const workbook = new ExcelJS.Workbook();
     const worksheet = workbook.addWorksheet("Data Prestasi");
@@ -273,10 +353,10 @@ export const exportPrestasiExcel = async (req, res) => {
 
 export const exportSiswaExcel = async (req, res) => {
   try {
-    const { id_tahun_ajaran } = req.query;
+    const { tahun_ajaran } = req.query;
 
-    if (!id_tahun_ajaran) {
-      return res.status(400).json({ message: "id_tahun_ajaran is required" });
+    if (!tahun_ajaran) {
+      return res.status(400).json({ message: "tahun_ajaran is required" });
     }
 
     const [rows] = await db.query(
@@ -300,8 +380,8 @@ export const exportSiswaExcel = async (req, res) => {
         ta.tahun_ajaran
       FROM siswa s
       JOIN tahun_ajaran ta ON s.id_tahun_ajaran = ta.id
-      WHERE id_tahun_ajaran = ?`,
-      [id_tahun_ajaran],
+      WHERE ta.tahun_ajaran = ?`,
+      [tahun_ajaran],
     );
 
     // Create workbook
@@ -412,7 +492,30 @@ export const exportSiswaExcelTemplate = async (req, res) => {
 /* Export PDF Functions */
 export const exportRekapKehadiranPDF = async (req, res) => {
   try {
-    const [rows] = await db.query(`
+    const { tahun_ajaran, semester, kelas } = req.query;
+
+    let whereClause = "WHERE 1=1";
+    const filterValues = [];
+
+    // Filter tahun ajaran & semester
+    if (tahun_ajaran) {
+      whereClause += " AND ta.tahun_ajaran = ?";
+      filterValues.push(tahun_ajaran);
+
+      if (semester) {
+        whereClause += " AND ta.semester = ?";
+        filterValues.push(semester);
+      }
+    }
+
+    // Filter kelas
+    if (kelas) {
+      whereClause += " AND s.kelas = ?";
+      filterValues.push(kelas);
+    }
+
+    const [rows] = await db.query(
+      `
       SELECT
         s.nisn,
         s.nama,
@@ -434,11 +537,15 @@ export const exportRekapKehadiranPDF = async (req, res) => {
         ) AS total_terlambat
 
       FROM siswa s
+      JOIN tahun_ajaran ta ON s.id_tahun_ajaran = ta.id
       LEFT JOIN absensi a ON a.id_siswa = s.id
       LEFT JOIN perizinan_siswa ps ON ps.id_siswa = s.id
+      ${whereClause}
       GROUP BY s.id
-      ORDER BY s.nisn ASC;
-    `);
+      ORDER BY s.kelas ASC;
+    `,
+      filterValues,
+    );
 
     const html = usePDFTemplate(`
       <h2 style="text-align:center;">DATA REKAP KEHADIRAN</h2>
@@ -497,7 +604,30 @@ export const exportRekapKehadiranPDF = async (req, res) => {
 
 export const exportPelanggaranPDF = async (req, res) => {
   try {
-    const [rows] = await db.query(`
+    const { tahun_ajaran, semester, kelas } = req.query;
+
+    let whereClause = "WHERE 1=1";
+    const filterValues = [];
+
+    // Filter tahun ajaran & semester
+    if (tahun_ajaran) {
+      whereClause += " AND ta.tahun_ajaran = ?";
+      filterValues.push(tahun_ajaran);
+
+      if (semester) {
+        whereClause += " AND ta.semester = ?";
+        filterValues.push(semester);
+      }
+    }
+
+    // Filter kelas
+    if (kelas) {
+      whereClause += " AND s.kelas = ?";
+      filterValues.push(kelas);
+    }
+
+    const [rows] = await db.query(
+      `
       SELECT
         ps.tanggal,
         ps.keterangan,
@@ -507,10 +637,14 @@ export const exportPelanggaranPDF = async (req, res) => {
         jp.pelanggaran,
         jp.poin
       FROM pelanggaran_siswa ps
+      JOIN tahun_ajaran ta ON s.id_tahun_ajaran = ta.id
       JOIN siswa s ON ps.id_siswa = s.id
       JOIN jenis_pelanggaran jp ON ps.id_jenis_pelanggaran = jp.id
+      ${whereClause}
       ORDER BY jp.poin DESC
-    `);
+    `,
+      filterValues,
+    );
 
     const html = usePDFTemplate(`
       <h2 style="text-align:center;">DATA PELANGGARAN</h2>
@@ -565,7 +699,30 @@ export const exportPelanggaranPDF = async (req, res) => {
 
 export const exportPrestasiPDF = async (req, res) => {
   try {
-    const [rows] = await db.query(`
+    const { tahun_ajaran, semester, kelas } = req.query;
+
+    let whereClause = "WHERE 1=1";
+    const filterValues = [];
+
+    // Filter tahun ajaran & semester
+    if (tahun_ajaran) {
+      whereClause += " AND ta.tahun_ajaran = ?";
+      filterValues.push(tahun_ajaran);
+
+      if (semester) {
+        whereClause += " AND ta.semester = ?";
+        filterValues.push(semester);
+      }
+    }
+
+    // Filter kelas
+    if (kelas) {
+      whereClause += " AND s.kelas = ?";
+      filterValues.push(kelas);
+    }
+
+    const [rows] = await db.query(
+      `
       SELECT
         p.nama_lomba,
         p.tanggal,
@@ -578,8 +735,11 @@ export const exportPrestasiPDF = async (req, res) => {
       FROM prestasi_siswa p
       JOIN siswa s ON p.id_siswa = s.id
       JOIN tahun_ajaran ta ON s.id_tahun_ajaran = ta.id
+      ${whereClause}
       ORDER BY p.tanggal DESC
-    `);
+    `,
+      filterValues,
+    );
 
     const html = usePDFTemplate(`
       <h2 style="text-align:center;">DATA PRESTASI</h2>
