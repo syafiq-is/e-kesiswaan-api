@@ -164,37 +164,28 @@ export const getRekapKehadiran = async (req, res) => {
 
       default:
         dateConditionAbsensi = `DATE(a.created_at)=CURDATE()`;
-        dateConditionPerizinan = `p.tanggal=CURDATE()`;
+        dateConditionPerizinan = `DATE(p.tanggal)=CURDATE()`;
     }
 
     const query = `
       SELECT
         LEFT(s.kelas,1) AS tingkat,
 
-        COUNT(DISTINCT CASE
-          WHEN ${dateConditionAbsensi} THEN a.id
-        END) AS hadir,
+        COUNT(DISTINCT a.id) AS hadir,
 
-        SUM(CASE
-          WHEN p.status='izin' AND ${dateConditionPerizinan} THEN 1
-          ELSE 0
-        END) AS izin,
-
-        SUM(CASE
-          WHEN p.status='sakit' AND ${dateConditionPerizinan} THEN 1
-          ELSE 0
-        END) AS sakit,
-
-        SUM(CASE
-          WHEN p.status='alpha' AND ${dateConditionPerizinan} THEN 1
-          ELSE 0
-        END) AS alpha
+        SUM(CASE WHEN p.status='izin' THEN 1 ELSE 0 END) AS izin,
+        SUM(CASE WHEN p.status='sakit' THEN 1 ELSE 0 END) AS sakit,
+        SUM(CASE WHEN p.status='alpha' THEN 1 ELSE 0 END) AS alpha
 
       FROM siswa s
+
       LEFT JOIN absensi a
         ON a.id_siswa = s.id
+        AND ${dateConditionAbsensi}
+
       LEFT JOIN perizinan_siswa p
         ON p.id_siswa = s.id
+        AND ${dateConditionPerizinan}
 
       WHERE s.id_tahun_ajaran = ?
 
