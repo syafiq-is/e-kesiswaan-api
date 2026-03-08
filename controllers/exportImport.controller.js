@@ -353,10 +353,26 @@ export const exportPrestasiExcel = async (req, res) => {
 
 export const exportSiswaExcel = async (req, res) => {
   try {
-    const { tahun_ajaran } = req.query;
+    const { tahun_ajaran, semester, kelas } = req.query;
 
-    if (!tahun_ajaran) {
-      return res.status(400).json({ message: "tahun_ajaran is required" });
+    let whereClause = "WHERE 1=1";
+    const filterValues = [];
+
+    // Filter tahun ajaran & semester
+    if (tahun_ajaran) {
+      whereClause += " AND ta.tahun_ajaran = ?";
+      filterValues.push(tahun_ajaran);
+
+      if (semester) {
+        whereClause += " AND ta.semester = ?";
+        filterValues.push(semester);
+      }
+    }
+
+    // Filter kelas
+    if (kelas) {
+      whereClause += " AND s.kelas = ?";
+      filterValues.push(kelas);
     }
 
     const [rows] = await db.query(
@@ -380,8 +396,9 @@ export const exportSiswaExcel = async (req, res) => {
         ta.tahun_ajaran
       FROM siswa s
       JOIN tahun_ajaran ta ON s.id_tahun_ajaran = ta.id
-      WHERE ta.tahun_ajaran = ?`,
-      [tahun_ajaran],
+      ${whereClause}
+      ORDER BY s.kelas ASC, s.nama ASC`,
+      filterValues,
     );
 
     // Create workbook

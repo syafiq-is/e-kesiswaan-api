@@ -114,7 +114,6 @@ export const createPrestasi = async (req, res) => {
       kategori,
       tingkat,
       peringkat,
-      // gambar,
     } = req.body;
 
     const gambarPath = req.file ? `uploads/${req.file.filename}` : null;

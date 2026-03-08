@@ -118,6 +118,8 @@ export const updatePerizinanById = async (req, res) => {
   try {
     const { status, keterangan, tanggal } = req.body;
 
+    const gambarPath = req.file ? `uploads/${req.file.filename}` : null;
+
     if (!status && !keterangan && !tanggal) {
       return res.status(400).json({ message: "Nothing to update" });
     }
@@ -132,10 +134,11 @@ export const updatePerizinanById = async (req, res) => {
       SET
         status = COALESCE(?, status),
         keterangan = COALESCE(?, keterangan),
-        tanggal = COALESCE(?, tanggal)
+        tanggal = COALESCE(?, tanggal),
+        gambar = COALESCE(?, gambar)
       WHERE id = ?
       `,
-      [status, keterangan, tanggal, req.params.id],
+      [status, keterangan, tanggal, gambarPath || null, req.params.id],
     );
 
     if (result.affectedRows === 0) {

@@ -247,6 +247,8 @@ export const updateSiswaById = async (req, res) => {
       penghasilan_orang_tua,
     } = req.body;
 
+    const gambarPath = req.file ? `uploads/${req.file.filename}` : null;
+
     if (jenis_kelamin && !["L", "P"].includes(jenis_kelamin)) {
       return res.status(400).json({ message: "Invalid jenis_kelamin" });
     }
@@ -267,8 +269,9 @@ export const updateSiswaById = async (req, res) => {
         nama_wali = COALESCE(?, nama_wali),
         pekerjaan_wali = COALESCE(?, pekerjaan_wali),
         no_telepon = COALESCE(?, no_telepon),
-        penghasilan_orang_tua = COALESCE(?, penghasilan_orang_tua)
-      WHERE id = ?
+        penghasilan_orang_tua = COALESCE(?, penghasilan_orang_tua),
+        gambar = COALESCE(?, gambar)
+        WHERE id = ?
       `,
       [
         nama || null,
@@ -285,6 +288,7 @@ export const updateSiswaById = async (req, res) => {
         pekerjaan_wali || null,
         no_telepon || null,
         penghasilan_orang_tua || null,
+        gambarPath || null,
         req.params.id,
       ],
     );
