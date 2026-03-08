@@ -99,7 +99,7 @@ export const getAllPelanggaran = async (req, res) => {
 /* Get All Siswa with Total Poin + Riwayat */
 export const getAllTotalPoinSiswa = async (req, res) => {
   try {
-    const { page = 1, limit = 10, search } = req.query;
+    const { page = 1, limit = 10, search, tahun_ajaran, semester } = req.query;
 
     const pageNumber = parseInt(page);
     const limitNumber = parseInt(limit);
@@ -107,6 +107,17 @@ export const getAllTotalPoinSiswa = async (req, res) => {
 
     let whereClause = "WHERE 1=1";
     const filterValues = [];
+
+    // Filter tahun ajaran & semester
+    if (tahun_ajaran) {
+      whereClause += " AND ta.tahun_ajaran = ?";
+      filterValues.push(tahun_ajaran);
+
+      if (semester) {
+        whereClause += " AND ta.semester = ?";
+        filterValues.push(semester);
+      }
+    }
 
     if (search) {
       whereClause += " AND (s.nama LIKE ? OR s.nisn LIKE ?)";
@@ -147,6 +158,7 @@ export const getAllTotalPoinSiswa = async (req, res) => {
       FROM siswa s
       LEFT JOIN pelanggaran_siswa ps ON ps.id_siswa = s.id
       LEFT JOIN jenis_pelanggaran jp ON ps.id_jenis_pelanggaran = jp.id
+      JOIN tahun_ajaran ta ON s.id_tahun_ajaran = ta.id
       ${whereClause}
       GROUP BY s.id
       ORDER BY total_poin DESC

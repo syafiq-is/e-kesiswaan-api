@@ -1,7 +1,7 @@
 import db from "../lib/database.js";
 export const getRekapKehadiran = async (req, res) => {
   try {
-    const { page = 1, limit = 10, kelas } = req.query;
+    const { page = 1, limit = 10, tahun_ajaran, semester, kelas } = req.query;
 
     const pageNumber = parseInt(page);
     const limitNumber = parseInt(limit);
@@ -9,6 +9,17 @@ export const getRekapKehadiran = async (req, res) => {
 
     let whereClause = "WHERE 1=1";
     const filterValues = [];
+
+    // Filter tahun ajaran & semester
+    if (tahun_ajaran) {
+      whereClause += " AND ta.tahun_ajaran = ?";
+      filterValues.push(tahun_ajaran);
+
+      if (semester) {
+        whereClause += " AND ta.semester = ?";
+        filterValues.push(semester);
+      }
+    }
 
     // Optional filter kelas
     if (kelas) {
@@ -46,6 +57,7 @@ export const getRekapKehadiran = async (req, res) => {
       FROM siswa s
       LEFT JOIN absensi a ON a.id_siswa = s.id
       LEFT JOIN perizinan_siswa ps ON ps.id_siswa = s.id
+      JOIN tahun_ajaran ta ON s.id_tahun_ajaran = ta.id
       ${whereClause}
       GROUP BY s.id
       ORDER BY s.nama ASC
