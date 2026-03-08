@@ -130,6 +130,7 @@ export const getAllTotalPoinSiswa = async (req, res) => {
         FROM siswa s
         LEFT JOIN pelanggaran_siswa ps ON ps.id_siswa = s.id
         LEFT JOIN jenis_pelanggaran jp ON ps.id_jenis_pelanggaran = jp.id
+        JOIN tahun_ajaran ta ON s.id_tahun_ajaran = ta.id
         ${whereClause}
         GROUP BY s.id
       ) AS counted
