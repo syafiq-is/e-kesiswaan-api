@@ -29,7 +29,7 @@ export const getAllPerizinan = async (req, res) => {
         s.id AS id_siswa,
         s.nama AS nama_siswa,
         s.kelas,
-        s.gambar
+        p.gambar
       FROM perizinan_siswa p
       JOIN siswa s ON s.id = p.id_siswa
       JOIN tahun_ajaran ta ON s.id_tahun_ajaran = ta.id
