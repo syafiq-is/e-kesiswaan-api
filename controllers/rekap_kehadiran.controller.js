@@ -30,6 +30,7 @@ export const getRekapKehadiran = async (req, res) => {
     const countQuery = `
       SELECT COUNT(*) AS total
       FROM siswa s
+      JOIN tahun_ajaran ta ON s.id_tahun_ajaran = ta.id 
       ${whereClause}
     `;
 
