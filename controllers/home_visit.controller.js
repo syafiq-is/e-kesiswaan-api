@@ -50,7 +50,7 @@ export const getAllHomeVisit = async (req, res) => {
       JOIN siswa s ON s.id = hv.id_siswa
       JOIN tahun_ajaran ta ON s.id_tahun_ajaran = ta.id
       ${whereClause}
-      ORDER BY hv.created_at DESC
+      ORDER BY hv.tanggal DESC
       LIMIT ? OFFSET ?
     `;
 

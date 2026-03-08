@@ -25,6 +25,7 @@ export const getAllPerizinan = async (req, res) => {
         p.id,
         p.status,
         p.keterangan,
+        p.tanggal,
         p.created_at,
         s.id AS id_siswa,
         s.nama AS nama_siswa,
@@ -34,7 +35,7 @@ export const getAllPerizinan = async (req, res) => {
       JOIN siswa s ON s.id = p.id_siswa
       JOIN tahun_ajaran ta ON s.id_tahun_ajaran = ta.id
       ${whereClause}
-      ORDER BY p.created_at DESC
+      ORDER BY p.tanggal DESC
     `,
       filterValues,
     );
