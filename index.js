@@ -2,12 +2,16 @@ import express from "express";
 import dotenv from "dotenv";
 import cookieParser from "cookie-parser";
 import cors from "cors";
+import path from "path";
+import { fileURLToPath } from "url";
 
 import routes from "./routes.js";
 
 dotenv.config();
 
 const app = express();
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 // ===== Allow CORS from any origin (for development only) ===== //
 const allowedOrigins = [
@@ -49,6 +53,7 @@ app.use((req, res, next) => {
 // app.use(express.urlencoded({ extended: true })); // parse URL-encoded body
 app.use(express.json()); // parse JSON body
 app.use(cookieParser()); // read cookies
+app.use("/uploads", express.static(path.join(__dirname, "uploads"))); // serve uploaded files
 
 // ===== Routes ===== //
 app.use("/api", routes);
