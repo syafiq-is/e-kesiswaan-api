@@ -135,7 +135,6 @@ export const getSiswaById = async (req, res) => {
 export const createSiswa = async (req, res) => {
   try {
     const {
-      id_tahun_ajaran,
       nama,
       nis,
       nisn,
@@ -156,16 +155,13 @@ export const createSiswa = async (req, res) => {
 
     const gambarPath = req.file ? `uploads/${req.file.filename}` : null;
 
-    if (
-      !id_tahun_ajaran ||
-      !nama ||
-      !nis ||
-      !nisn ||
-      !kelas ||
-      !jenis_kelamin
-    ) {
+    if (!nama || !nis || !nisn || !kelas || !jenis_kelamin) {
       return res.status(400).json({ message: "Required fields missing" });
     }
+
+    const [tahun_ajaran_aktif] = await db.query(
+      "SELECT id FROM tahun_ajaran WHERE status = 'aktif' LIMIT 1",
+    );
 
     if (!["L", "P"].includes(jenis_kelamin)) {
       return res.status(400).json({ message: "Invalid jenis_kelamin" });
@@ -195,7 +191,7 @@ export const createSiswa = async (req, res) => {
       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `,
       [
-        id_tahun_ajaran,
+        tahun_ajaran_aktif[0].id,
         nama,
         nis,
         nisn,

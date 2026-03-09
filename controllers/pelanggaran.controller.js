@@ -218,11 +218,15 @@ export const getPelanggaranById = async (req, res) => {
 /* Create Pelanggaran Siswa */
 export const createPelanggaran = async (req, res) => {
   try {
-    const { id_siswa, id_jenis_pelanggaran, id_tahun_ajaran, tanggal, keterangan } = req.body;
+    const { id_siswa, id_jenis_pelanggaran, tanggal, keterangan } = req.body;
 
-    if ((!id_siswa || !id_tahun_ajaran || !id_jenis_pelanggaran || !tanggal)) {
+    if (!id_siswa || !id_jenis_pelanggaran || !tanggal) {
       return res.status(400).json({ message: "Required fields missing" });
     }
+
+    const [tahun_ajaran_aktif] = await db.query(
+      "SELECT id FROM tahun_ajaran WHERE status = 'aktif' LIMIT 1",
+    );
 
     // Validate siswa
     const [siswa] = await db.query("SELECT id FROM siswa WHERE id = ?", [
@@ -249,7 +253,13 @@ export const createPelanggaran = async (req, res) => {
       (id_siswa, id_jenis_pelanggaran, id_tahun_ajaran, tanggal, keterangan)
       VALUES (?, ?, ?, ?, ?)
       `,
-      [id_siswa, id_jenis_pelanggaran, id_tahun_ajaran, tanggal, keterangan || null],
+      [
+        id_siswa,
+        id_jenis_pelanggaran,
+        tahun_ajaran_aktif[0].id,
+        tanggal,
+        keterangan || null,
+      ],
     );
 
     res.status(201).json({

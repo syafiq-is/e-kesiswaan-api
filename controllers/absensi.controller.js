@@ -81,10 +81,14 @@ export const getAllAbsensi = async (req, res) => {
 /* Create Absensi */
 export const createAbsensi = async (req, res) => {
   try {
-    const { nisn, id_tahun_ajaran } = req.body;
+    const { nisn } = req.body;
 
-    if (!nisn || !id_tahun_ajaran)
+    if (!nisn)
       return res.status(400).json({ message: "Required fields missing" });
+
+    const [tahun_ajaran_aktif] = await db.query(
+      "SELECT id FROM tahun_ajaran WHERE status = 'aktif' LIMIT 1",
+    );
 
     // ensure siswa exists
     const [siswa] = await db.query("SELECT id FROM siswa WHERE nisn = ?", [
@@ -97,7 +101,7 @@ export const createAbsensi = async (req, res) => {
 
     await db.query(
       `INSERT INTO absensi (id_siswa, id_tahun_ajaran) VALUES (?, ?)`,
-      [siswa[0].id, id_tahun_ajaran],
+      [siswa[0].id, tahun_ajaran_aktif[0].id],
     );
 
     res.status(201).json({ message: "Absensi created successfully" });

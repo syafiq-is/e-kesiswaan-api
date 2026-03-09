@@ -79,13 +79,17 @@ export const getPerizinanById = async (req, res) => {
 /* Create Perizinan Siswa */
 export const createPerizinan = async (req, res) => {
   try {
-    const { id_siswa, id_tahun_ajaran, status, keterangan, tanggal } = req.body;
+    const { id_siswa, status, keterangan, tanggal } = req.body;
 
     const gambarPath = req.file ? `uploads/${req.file.filename}` : null;
 
-    if (!id_siswa || !id_tahun_ajaran || !status || !tanggal) {
+    if (!id_siswa || !status || !tanggal) {
       return res.status(400).json({ message: "Required fields missing" });
     }
+
+    const [tahun_ajaran_aktif] = await db.query(
+      "SELECT id FROM tahun_ajaran WHERE status = 'aktif' LIMIT 1",
+    );
 
     if (!["izin", "sakit", "alpha"].includes(status)) {
       return res.status(400).json({ message: "Invalid status" });
@@ -106,7 +110,14 @@ export const createPerizinan = async (req, res) => {
       (id_siswa, id_tahun_ajaran, status, keterangan, tanggal, gambar)
       VALUES (?, ?, ?, ?, ?, ?)
       `,
-      [id_siswa, id_tahun_ajaran, status, keterangan, tanggal, gambarPath || null],
+      [
+        id_siswa,
+        tahun_ajaran_aktif[0].id,
+        status,
+        keterangan,
+        tanggal,
+        gambarPath || null,
+      ],
     );
 
     res.status(201).json({ message: "Perizinan siswa created successfully" });

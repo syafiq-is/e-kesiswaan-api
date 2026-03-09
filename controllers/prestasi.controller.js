@@ -108,7 +108,6 @@ export const createPrestasi = async (req, res) => {
   try {
     const {
       id_siswa,
-      id_tahun_ajaran,
       nama_lomba,
       penyelenggara,
       tanggal,
@@ -122,7 +121,6 @@ export const createPrestasi = async (req, res) => {
 
     if (
       !id_siswa ||
-      !id_tahun_ajaran ||
       !nama_lomba ||
       !penyelenggara ||
       !tanggal ||
@@ -132,6 +130,10 @@ export const createPrestasi = async (req, res) => {
     ) {
       return res.status(400).json({ message: "Required fields missing" });
     }
+
+    const [tahun_ajaran_aktif] = await db.query(
+      "SELECT id FROM tahun_ajaran WHERE status = 'aktif' LIMIT 1",
+    );
 
     if (!["akademik", "non-akademik"].includes(kategori)) {
       return res.status(400).json({ message: "Invalid kategori" });
@@ -166,13 +168,11 @@ export const createPrestasi = async (req, res) => {
       `,
       [
         id_siswa,
-        id_tahun_ajaran,
+        tahun_ajaran_aktif[0].id,
         nama_lomba,
         penyelenggara,
         tanggal,
         keterangan,
-
-        tanggal,
         kategori,
         tingkat,
         peringkat,

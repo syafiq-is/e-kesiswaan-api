@@ -108,11 +108,15 @@ export const getHomeVisitById = async (req, res) => {
 /* Create Home Visit */
 export const createHomeVisit = async (req, res) => {
   try {
-    const { id_siswa, id_tahun_ajaran, tanggal, status } = req.body;
+    const { id_siswa, tanggal, status } = req.body;
 
-    if (!id_siswa || !id_tahun_ajaran || !tanggal || !status) {
+    if (!id_siswa || !tanggal || !status) {
       return res.status(400).json({ message: "Required fields missing" });
     }
+
+    const [tahun_ajaran_aktif] = await db.query(
+      "SELECT id FROM tahun_ajaran WHERE status = 'aktif' LIMIT 1",
+    );
 
     // Validate siswa
     const [siswa] = await db.query("SELECT id FROM siswa WHERE id = ?", [
@@ -129,7 +133,7 @@ export const createHomeVisit = async (req, res) => {
       (id_siswa, id_tahun_ajaran, tanggal, status)
       VALUES (?, ?, ?, ?)
       `,
-      [id_siswa, id_tahun_ajaran, tanggal, status],
+      [id_siswa, tahun_ajaran_aktif[0].id, tanggal, status],
     );
 
     res.status(201).json({ message: "Home visit created successfully" });
