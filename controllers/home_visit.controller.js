@@ -33,7 +33,7 @@ export const getAllHomeVisit = async (req, res) => {
       SELECT COUNT(*) AS total
       FROM home_visit hv
       JOIN siswa s ON s.id = hv.id_siswa
-      JOIN tahun_ajaran ta ON s.id_tahun_ajaran = ta.id
+      JOIN tahun_ajaran ta ON hv.id_tahun_ajaran = ta.id
       ${whereClause}
     `;
 
@@ -45,10 +45,12 @@ export const getAllHomeVisit = async (req, res) => {
         hv.created_at,
         s.id AS id_siswa,
         s.nama AS nama_siswa,
-        s.kelas
+        s.kelas,
+        ta.tahun_ajaran,
+        ta.semester
       FROM home_visit hv
       JOIN siswa s ON s.id = hv.id_siswa
-      JOIN tahun_ajaran ta ON s.id_tahun_ajaran = ta.id
+      JOIN tahun_ajaran ta ON hv.id_tahun_ajaran = ta.id
       ${whereClause}
       ORDER BY hv.tanggal DESC
       LIMIT ? OFFSET ?

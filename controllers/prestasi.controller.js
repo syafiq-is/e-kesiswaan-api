@@ -27,7 +27,7 @@ export const getAllPrestasi = async (req, res) => {
       SELECT COUNT(*) as total
       FROM prestasi_siswa p
       JOIN siswa s ON p.id_siswa = s.id
-      JOIN tahun_ajaran ta ON s.id_tahun_ajaran = ta.id
+      JOIN tahun_ajaran ta ON p.id_tahun_ajaran = ta.id
       ${whereClause}
     `;
 
@@ -44,10 +44,11 @@ export const getAllPrestasi = async (req, res) => {
         p.gambar,
         s.nama AS nama_siswa,
         s.nisn,
-        ta.tahun_ajaran
+        ta.tahun_ajaran,
+        ta.semester
       FROM prestasi_siswa p
       JOIN siswa s ON p.id_siswa = s.id
-      JOIN tahun_ajaran ta ON s.id_tahun_ajaran = ta.id
+      JOIN tahun_ajaran ta ON p.id_tahun_ajaran = ta.id
       ${whereClause}
       ORDER BY p.tanggal DESC
       LIMIT ? OFFSET ?

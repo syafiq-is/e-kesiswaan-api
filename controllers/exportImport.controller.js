@@ -242,7 +242,7 @@ export const exportPelanggaranExcel = async (req, res) => {
         jp.pelanggaran,
         jp.poin
       FROM pelanggaran_siswa ps
-      JOIN tahun_ajaran ta ON s.id_tahun_ajaran = ta.id
+      JOIN tahun_ajaran ta ON ps.id_tahun_ajaran = ta.id
       JOIN siswa s ON ps.id_siswa = s.id
       JOIN jenis_pelanggaran jp ON ps.id_jenis_pelanggaran = jp.id
       ${whereClause}
@@ -321,7 +321,7 @@ export const exportPrestasiExcel = async (req, res) => {
         ta.tahun_ajaran
       FROM prestasi_siswa p
       JOIN siswa s ON p.id_siswa = s.id
-      JOIN tahun_ajaran ta ON s.id_tahun_ajaran = ta.id
+      JOIN tahun_ajaran ta ON p.id_tahun_ajaran = ta.id
       ${whereClause}
       ORDER BY p.tanggal DESC
     `,
@@ -676,7 +676,7 @@ export const exportPelanggaranPDF = async (req, res) => {
         jp.pelanggaran,
         jp.poin
       FROM pelanggaran_siswa ps
-      JOIN tahun_ajaran ta ON s.id_tahun_ajaran = ta.id
+      JOIN tahun_ajaran ta ON ps.id_tahun_ajaran = ta.id
       JOIN siswa s ON ps.id_siswa = s.id
       JOIN jenis_pelanggaran jp ON ps.id_jenis_pelanggaran = jp.id
       ${whereClause}
@@ -773,7 +773,7 @@ export const exportPrestasiPDF = async (req, res) => {
         ta.tahun_ajaran
       FROM prestasi_siswa p
       JOIN siswa s ON p.id_siswa = s.id
-      JOIN tahun_ajaran ta ON s.id_tahun_ajaran = ta.id
+      JOIN tahun_ajaran ta ON p.id_tahun_ajaran = ta.id
       ${whereClause}
       ORDER BY p.tanggal DESC
     `,

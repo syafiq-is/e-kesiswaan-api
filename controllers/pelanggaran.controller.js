@@ -47,7 +47,7 @@ export const getAllPelanggaran = async (req, res) => {
       FROM pelanggaran_siswa ps
       JOIN siswa s ON ps.id_siswa = s.id
       JOIN jenis_pelanggaran jp ON ps.id_jenis_pelanggaran = jp.id
-      JOIN tahun_ajaran ta ON s.id_tahun_ajaran = ta.id
+      JOIN tahun_ajaran ta ON ps.id_tahun_ajaran = ta.id
       ${whereClause}
     `;
 
@@ -64,11 +64,13 @@ export const getAllPelanggaran = async (req, res) => {
         s.nisn,
         s.kelas,
         jp.pelanggaran,
-        jp.poin
+        jp.poin,
+        ta.tahun_ajaran,
+        ta.semester
       FROM pelanggaran_siswa ps
       JOIN siswa s ON ps.id_siswa = s.id
       JOIN jenis_pelanggaran jp ON ps.id_jenis_pelanggaran = jp.id
-      JOIN tahun_ajaran ta ON s.id_tahun_ajaran = ta.id
+      JOIN tahun_ajaran ta ON ps.id_tahun_ajaran = ta.id
       ${whereClause}
       ORDER BY ps.tanggal DESC
       LIMIT ? OFFSET ?
@@ -127,7 +129,7 @@ export const getAllTotalPoinSiswa = async (req, res) => {
     const countQuery = `
       SELECT COUNT(DISTINCT s.id) AS total
       FROM siswa s
-      JOIN tahun_ajaran ta ON s.id_tahun_ajaran = ta.id
+      JOIN tahun_ajaran ta ON ps.id_tahun_ajaran = ta.id
       ${whereClause}
     `;
 
@@ -163,7 +165,7 @@ export const getAllTotalPoinSiswa = async (req, res) => {
         GROUP BY ps.id_siswa
       ) p ON p.id_siswa = s.id
 
-      JOIN tahun_ajaran ta ON s.id_tahun_ajaran = ta.id
+      JOIN tahun_ajaran ta ON ps.id_tahun_ajaran = ta.id
       ${whereClause}
 
       ORDER BY total_poin DESC
