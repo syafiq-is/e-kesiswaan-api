@@ -108,9 +108,9 @@ export const getHomeVisitById = async (req, res) => {
 /* Create Home Visit */
 export const createHomeVisit = async (req, res) => {
   try {
-    const { id_siswa, tanggal, status } = req.body;
+    const { id_siswa, id_tahun_ajaran, tanggal, status } = req.body;
 
-    if (!id_siswa || !tanggal || !status) {
+    if (!id_siswa || !id_tahun_ajaran || !tanggal || !status) {
       return res.status(400).json({ message: "Required fields missing" });
     }
 
@@ -126,10 +126,10 @@ export const createHomeVisit = async (req, res) => {
     await db.query(
       `
       INSERT INTO home_visit
-      (id_siswa, tanggal, status)
-      VALUES (?, ?, ?)
+      (id_siswa, id_tahun_ajaran, tanggal, status)
+      VALUES (?, ?, ?, ?)
       `,
-      [id_siswa, tanggal, status],
+      [id_siswa, id_tahun_ajaran, tanggal, status],
     );
 
     res.status(201).json({ message: "Home visit created successfully" });

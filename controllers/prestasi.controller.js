@@ -108,6 +108,7 @@ export const createPrestasi = async (req, res) => {
   try {
     const {
       id_siswa,
+      id_tahun_ajaran,
       nama_lomba,
       penyelenggara,
       tanggal,
@@ -121,6 +122,7 @@ export const createPrestasi = async (req, res) => {
 
     if (
       !id_siswa ||
+      !id_tahun_ajaran ||
       !nama_lomba ||
       !penyelenggara ||
       !tanggal ||
@@ -159,11 +161,12 @@ export const createPrestasi = async (req, res) => {
     await db.query(
       `
       INSERT INTO prestasi_siswa
-      (id_siswa, nama_lomba, penyelenggara, tanggal, keterangan, kategori, tingkat, peringkat, gambar)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+      (id_siswa, id_tahun_ajaran, nama_lomba, penyelenggara, tanggal, keterangan, kategori, tingkat, peringkat, gambar)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `,
       [
         id_siswa,
+        id_tahun_ajaran,
         nama_lomba,
         penyelenggara,
         tanggal,

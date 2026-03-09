@@ -218,9 +218,9 @@ export const getPelanggaranById = async (req, res) => {
 /* Create Pelanggaran Siswa */
 export const createPelanggaran = async (req, res) => {
   try {
-    const { id_siswa, id_jenis_pelanggaran, tanggal, keterangan } = req.body;
+    const { id_siswa, id_jenis_pelanggaran, id_tahun_ajaran, tanggal, keterangan } = req.body;
 
-    if (!id_siswa || !id_jenis_pelanggaran || !tanggal) {
+    if ((!id_siswa || !id_tahun_ajaran || !id_jenis_pelanggaran || !tanggal)) {
       return res.status(400).json({ message: "Required fields missing" });
     }
 
@@ -246,10 +246,10 @@ export const createPelanggaran = async (req, res) => {
     await db.query(
       `
       INSERT INTO pelanggaran_siswa
-      (id_siswa, id_jenis_pelanggaran, tanggal, keterangan)
-      VALUES (?, ?, ?, ?)
+      (id_siswa, id_jenis_pelanggaran, id_tahun_ajaran, tanggal, keterangan)
+      VALUES (?, ?, ?, ?, ?)
       `,
-      [id_siswa, id_jenis_pelanggaran, tanggal, keterangan || null],
+      [id_siswa, id_jenis_pelanggaran, id_tahun_ajaran, tanggal, keterangan || null],
     );
 
     res.status(201).json({
