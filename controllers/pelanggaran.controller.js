@@ -125,15 +125,10 @@ export const getAllTotalPoinSiswa = async (req, res) => {
     }
 
     const countQuery = `
-      SELECT COUNT(*) AS total FROM (
-        SELECT s.id
-        FROM siswa s
-        LEFT JOIN pelanggaran_siswa ps ON ps.id_siswa = s.id
-        LEFT JOIN jenis_pelanggaran jp ON ps.id_jenis_pelanggaran = jp.id
-        JOIN tahun_ajaran ta ON s.id_tahun_ajaran = ta.id
-        ${whereClause}
-        GROUP BY s.id
-      ) AS counted
+      SELECT COUNT(DISTINCT s.id) AS total
+      FROM siswa s
+      JOIN tahun_ajaran ta ON s.id_tahun_ajaran = ta.id
+      ${whereClause}
     `;
 
     const dataQuery = `
@@ -142,26 +137,35 @@ export const getAllTotalPoinSiswa = async (req, res) => {
         s.nama AS nama_siswa,
         s.nisn,
         s.kelas,
-        COALESCE(SUM(jp.poin), 0) AS total_poin,
 
-        JSON_ARRAYAGG(
-          CASE 
-            WHEN ps.id IS NOT NULL THEN
-              JSON_OBJECT(
-                'tanggal', ps.tanggal,
-                'pelanggaran', jp.pelanggaran,
-                'poin', jp.poin,
-                'keterangan', ps.keterangan
-              )
-          END
-        ) AS riwayat_pelanggaran
+        COALESCE(p.total_poin,0) AS total_poin,
+        COALESCE(p.riwayat_pelanggaran, JSON_ARRAY()) AS riwayat_pelanggaran
 
       FROM siswa s
-      LEFT JOIN pelanggaran_siswa ps ON ps.id_siswa = s.id
-      LEFT JOIN jenis_pelanggaran jp ON ps.id_jenis_pelanggaran = jp.id
+
+      LEFT JOIN (
+        SELECT
+          ps.id_siswa,
+          SUM(jp.poin) AS total_poin,
+
+          JSON_ARRAYAGG(
+            JSON_OBJECT(
+              'tanggal', ps.tanggal,
+              'pelanggaran', jp.pelanggaran,
+              'poin', jp.poin,
+              'keterangan', ps.keterangan
+            )
+          ) AS riwayat_pelanggaran
+
+        FROM pelanggaran_siswa ps
+        JOIN jenis_pelanggaran jp
+          ON ps.id_jenis_pelanggaran = jp.id
+        GROUP BY ps.id_siswa
+      ) p ON p.id_siswa = s.id
+
       JOIN tahun_ajaran ta ON s.id_tahun_ajaran = ta.id
       ${whereClause}
-      GROUP BY s.id
+
       ORDER BY total_poin DESC
       LIMIT ? OFFSET ?
     `;

@@ -171,21 +171,32 @@ export const getRekapKehadiran = async (req, res) => {
       SELECT
         LEFT(s.kelas,1) AS tingkat,
 
-        COUNT(DISTINCT a.id) AS hadir,
-
-        SUM(CASE WHEN p.status='izin' THEN 1 ELSE 0 END) AS izin,
-        SUM(CASE WHEN p.status='sakit' THEN 1 ELSE 0 END) AS sakit,
-        SUM(CASE WHEN p.status='alpha' THEN 1 ELSE 0 END) AS alpha
+        COALESCE(a.hadir,0) AS hadir,
+        COALESCE(p.izin,0) AS izin,
+        COALESCE(p.sakit,0) AS sakit,
+        COALESCE(p.alpha,0) AS alpha
 
       FROM siswa s
 
-      LEFT JOIN absensi a
-        ON a.id_siswa = s.id
-        AND ${dateConditionAbsensi}
+      LEFT JOIN (
+        SELECT
+          id_siswa,
+          COUNT(*) AS hadir
+        FROM absensi a
+        WHERE ${dateConditionAbsensi}
+        GROUP BY id_siswa
+      ) a ON a.id_siswa = s.id
 
-      LEFT JOIN perizinan_siswa p
-        ON p.id_siswa = s.id
-        AND ${dateConditionPerizinan}
+      LEFT JOIN (
+        SELECT
+          id_siswa,
+          SUM(status='izin') AS izin,
+          SUM(status='sakit') AS sakit,
+          SUM(status='alpha') AS alpha
+        FROM perizinan_siswa p
+        WHERE ${dateConditionPerizinan}
+        GROUP BY id_siswa
+      ) p ON p.id_siswa = s.id
 
       WHERE s.id_tahun_ajaran = ?
 
