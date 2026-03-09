@@ -169,14 +169,22 @@ export const getRekapKehadiran = async (req, res) => {
 
     const query = `
       SELECT
-        LEFT(s.kelas,1) AS tingkat,
+        t.tingkat,
 
-        COALESCE(a.hadir,0) AS hadir,
-        COALESCE(p.izin,0) AS izin,
-        COALESCE(p.sakit,0) AS sakit,
-        COALESCE(p.alpha,0) AS alpha
+        SUM(COALESCE(a.hadir,0)) AS hadir,
+        SUM(COALESCE(p.izin,0)) AS izin,
+        SUM(COALESCE(p.sakit,0)) AS sakit,
+        SUM(COALESCE(p.alpha,0)) AS alpha
 
-      FROM siswa s
+      FROM (
+        SELECT 7 AS tingkat
+        UNION ALL SELECT 8
+        UNION ALL SELECT 9
+      ) t
+
+      LEFT JOIN siswa s
+        ON LEFT(s.kelas,1) = t.tingkat
+        AND s.id_tahun_ajaran = ?
 
       LEFT JOIN (
         SELECT
@@ -198,10 +206,8 @@ export const getRekapKehadiran = async (req, res) => {
         GROUP BY id_siswa
       ) p ON p.id_siswa = s.id
 
-      WHERE s.id_tahun_ajaran = ?
-
-      GROUP BY tingkat
-      ORDER BY tingkat
+      GROUP BY t.tingkat
+      ORDER BY t.tingkat
     `;
 
     const [rows] = await db.query(query, [id_tahun_ajaran]);
