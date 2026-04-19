@@ -26,6 +26,8 @@ export const getAllPerizinan = async (req, res) => {
         p.status,
         p.keterangan,
         p.tanggal,
+        p.jam_mulai,
+        p.jam_selesai,
         p.created_at,
         s.id AS id_siswa,
         s.nama AS nama_siswa,
@@ -79,11 +81,12 @@ export const getPerizinanById = async (req, res) => {
 /* Create Perizinan Siswa */
 export const createPerizinan = async (req, res) => {
   try {
-    const { id_siswa, status, keterangan, tanggal } = req.body;
+    const { id_siswa, status, keterangan, tanggal, jam_mulai, jam_selesai } =
+      req.body;
 
     const gambarPath = req.file ? `uploads/${req.file.filename}` : null;
 
-    if (!id_siswa || !status || !tanggal) {
+    if (!id_siswa || !status || !tanggal || !jam_mulai || !jam_selesai) {
       return res.status(400).json({ message: "Required fields missing" });
     }
 
@@ -107,8 +110,8 @@ export const createPerizinan = async (req, res) => {
     await db.query(
       `
       INSERT INTO perizinan_siswa
-      (id_siswa, id_tahun_ajaran, status, keterangan, tanggal, gambar)
-      VALUES (?, ?, ?, ?, ?, ?)
+      (id_siswa, id_tahun_ajaran, status, keterangan, tanggal, jam_mulai, jam_selesai, gambar)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
       `,
       [
         id_siswa,
@@ -116,6 +119,8 @@ export const createPerizinan = async (req, res) => {
         status,
         keterangan,
         tanggal,
+        jam_mulai,
+        jam_selesai,
         gambarPath || null,
       ],
     );
@@ -130,11 +135,11 @@ export const createPerizinan = async (req, res) => {
 /* Update Perizinan Siswa by ID */
 export const updatePerizinanById = async (req, res) => {
   try {
-    const { status, keterangan, tanggal } = req.body;
+    const { status, keterangan, tanggal, jam_mulai, jam_selesai } = req.body;
 
     const gambarPath = req.file ? `uploads/${req.file.filename}` : null;
 
-    if (!status && !keterangan && !tanggal) {
+    if (!status && !keterangan && !tanggal && !jam_mulai && !jam_selesai) {
       return res.status(400).json({ message: "Nothing to update" });
     }
 
@@ -149,10 +154,20 @@ export const updatePerizinanById = async (req, res) => {
         status = COALESCE(?, status),
         keterangan = COALESCE(?, keterangan),
         tanggal = COALESCE(?, tanggal),
+        jam_mulai = COALESCE(?, jam_mulai),
+        jam_selesai = COALESCE(?, jam_selesai),
         gambar = COALESCE(?, gambar)
       WHERE id = ?
       `,
-      [status, keterangan, tanggal, gambarPath || null, req.params.id],
+      [
+        status,
+        keterangan,
+        tanggal,
+        jam_mulai,
+        jam_selesai,
+        gambarPath || null,
+        req.params.id,
+      ],
     );
 
     if (result.affectedRows === 0) {

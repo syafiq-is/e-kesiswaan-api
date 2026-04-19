@@ -42,7 +42,9 @@ export const getAllAbsensi = async (req, res) => {
 
     const dataQuery = `
       SELECT 
+        a.id,
         a.created_at,
+        a.tipe_absensi,
         s.nama,
         s.nisn,
         s.kelas,
@@ -81,9 +83,9 @@ export const getAllAbsensi = async (req, res) => {
 /* Create Absensi */
 export const createAbsensi = async (req, res) => {
   try {
-    const { nisn } = req.body;
+    const { nisn, tipe_absensi } = req.body;
 
-    if (!nisn)
+    if (!nisn || !tipe_absensi)
       return res.status(400).json({ message: "Required fields missing" });
 
     const [tahun_ajaran_aktif] = await db.query(
@@ -100,8 +102,8 @@ export const createAbsensi = async (req, res) => {
     }
 
     await db.query(
-      `INSERT INTO absensi (id_siswa, id_tahun_ajaran) VALUES (?, ?)`,
-      [siswa[0].id, tahun_ajaran_aktif[0].id],
+      `INSERT INTO absensi (id_siswa, id_tahun_ajaran, tipe_absensi) VALUES (?, ?, ?)`,
+      [siswa[0].id, tahun_ajaran_aktif[0].id, tipe_absensi],
     );
 
     res.status(201).json({ message: "Absensi created successfully" });
@@ -123,6 +125,49 @@ export const deleteAbsensiById = async (req, res) => {
     }
 
     res.json({ message: "Absensi deleted successfully" });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: "Server error" });
+  }
+};
+
+/* Delete Absensi by nisn */
+export const deleteAbsensiByNISN = async (req, res) => {
+  try {
+    const { nisn, tipe_absensi } = req.params;
+
+    console.log(req.params);
+
+    if (!tipe_absensi) {
+      return res.status(400).json({ message: "tipe_absensi is required" });
+    }
+
+    // cari siswa
+    const [siswa] = await db.query("SELECT id FROM siswa WHERE nisn = ?", [
+      nisn,
+    ]);
+
+    if (!siswa.length) {
+      return res.status(404).json({ message: "Siswa not found" });
+    }
+
+    // delete spesifik hari ini + tipe
+    const [result] = await db.query(
+      `DELETE FROM absensi 
+       WHERE id_siswa = ?
+       AND tipe_absensi = ?
+       AND created_at >= CURDATE()
+       AND created_at < CURDATE() + INTERVAL 1 DAY`,
+      [siswa[0].id, tipe_absensi],
+    );
+
+    if (result.affectedRows === 0) {
+      return res.status(404).json({
+        message: `No absensi ${tipe_absensi} found for today`,
+      });
+    }
+
+    res.json({ message: `absensi ${tipe_absensi} deleted successfully` });
   } catch (err) {
     console.error(err);
     res.status(500).json({ message: "Server error" });

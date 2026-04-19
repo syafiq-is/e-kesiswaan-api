@@ -53,9 +53,11 @@ export const getAllSiswa = async (req, res) => {
       SELECT
         s.id,
         s.nama,
-        s.nis,
+        s.nipd,
+        s.nik,
         s.nisn,
         s.kelas,
+        s.agama,
         s.jenis_kelamin,
         s.tempat_lahir,
         s.tanggal_lahir,
@@ -67,6 +69,12 @@ export const getAllSiswa = async (req, res) => {
         s.pekerjaan_wali,
         s.no_telepon,
         s.alamat,
+        s.rt,
+        s.rw,
+        s.dusun,
+        s.kelurahan,
+        s.kecamatan,
+        s.kode_pos,
         s.gambar,
         ta.tahun_ajaran
       FROM siswa s
@@ -136,13 +144,21 @@ export const createSiswa = async (req, res) => {
   try {
     const {
       nama,
-      nis,
+      nipd,
+      nik,
       nisn,
       kelas,
+      agama,
       jenis_kelamin,
       tempat_lahir,
       tanggal_lahir,
       alamat,
+      rt,
+      rw,
+      dusun,
+      kelurahan,
+      kecamatan,
+      kode_pos,
       nama_ayah,
       pekerjaan_ayah,
       nama_ibu,
@@ -155,7 +171,7 @@ export const createSiswa = async (req, res) => {
 
     const gambarPath = req.file ? `uploads/${req.file.filename}` : null;
 
-    if (!nama || !nis || !nisn || !kelas || !jenis_kelamin) {
+    if (!nama || !nipd || !nik || !nisn || !kelas || !jenis_kelamin || !agama) {
       return res.status(400).json({ message: "Required fields missing" });
     }
 
@@ -172,13 +188,21 @@ export const createSiswa = async (req, res) => {
       INSERT INTO siswa (
         id_tahun_ajaran,
         nama,
-        nis,
+        nipd,
+        nik,
         nisn,
         kelas,
+        agama,
         jenis_kelamin,
         tempat_lahir,
         tanggal_lahir,
         alamat,
+        rt,
+        rw,
+        dusun,
+        kelurahan,
+        kecamatan,
+        kode_pos,
         nama_ayah,
         pekerjaan_ayah,
         nama_ibu,
@@ -188,18 +212,26 @@ export const createSiswa = async (req, res) => {
         no_telepon,
         penghasilan_orang_tua,
         gambar
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `,
       [
         tahun_ajaran_aktif[0].id,
         nama,
-        nis,
+        nipd,
+        nik,
         nisn,
         kelas,
+        agama,
         jenis_kelamin,
         tempat_lahir || null,
         tanggal_lahir || null,
         alamat || null,
+        rt || null,
+        rw || null,
+        dusun || null,
+        kelurahan || null,
+        kecamatan || null,
+        kode_pos || null,
         nama_ayah || null,
         pekerjaan_ayah || null,
         nama_ibu || null,
@@ -228,11 +260,21 @@ export const updateSiswaById = async (req, res) => {
   try {
     const {
       nama,
+      nipd,
+      nik,
+      nisn,
       kelas,
+      agama,
       jenis_kelamin,
       tempat_lahir,
       tanggal_lahir,
       alamat,
+      rt,
+      rw,
+      dusun,
+      kelurahan,
+      kecamatan,
+      kode_pos,
       nama_ayah,
       pekerjaan_ayah,
       nama_ibu,
@@ -245,6 +287,10 @@ export const updateSiswaById = async (req, res) => {
 
     const gambarPath = req.file ? `uploads/${req.file.filename}` : null;
 
+    if (!nama || !nipd || !nik || !nisn || !kelas || !jenis_kelamin || !agama) {
+      return res.status(400).json({ message: "Required fields missing" });
+    }
+
     if (jenis_kelamin && !["L", "P"].includes(jenis_kelamin)) {
       return res.status(400).json({ message: "Invalid jenis_kelamin" });
     }
@@ -253,11 +299,21 @@ export const updateSiswaById = async (req, res) => {
       `
       UPDATE siswa SET
         nama = COALESCE(?, nama),
+        nipd = COALESCE(?, nipd),
+        nik = COALESCE(?, nik),
+        nisn = COALESCE(?, nisn),
         kelas = COALESCE(?, kelas),
+        agama = COALESCE(?, agama),
         jenis_kelamin = COALESCE(?, jenis_kelamin),
         tempat_lahir = COALESCE(?, tempat_lahir),
         tanggal_lahir = COALESCE(?, tanggal_lahir),
         alamat = COALESCE(?, alamat),
+        rt = COALESCE(?, rt),
+        rw = COALESCE(?, rw),
+        dusun = COALESCE(?, dusun),
+        kelurahan = COALESCE(?, kelurahan),
+        kecamatan = COALESCE(?, kecamatan),
+        kode_pos = COALESCE(?, kode_pos),
         nama_ayah = COALESCE(?, nama_ayah),
         pekerjaan_ayah = COALESCE(?, pekerjaan_ayah),
         nama_ibu = COALESCE(?, nama_ibu),
@@ -270,12 +326,22 @@ export const updateSiswaById = async (req, res) => {
         WHERE id = ?
       `,
       [
-        nama || null,
-        kelas || null,
-        jenis_kelamin || null,
+        nama,
+        nipd,
+        nik,
+        nisn,
+        kelas,
+        agama,
+        jenis_kelamin,
         tempat_lahir || null,
         tanggal_lahir || null,
         alamat || null,
+        rt || null,
+        rw || null,
+        dusun || null,
+        kelurahan || null,
+        kecamatan || null,
+        kode_pos || null,
         nama_ayah || null,
         pekerjaan_ayah || null,
         nama_ibu || null,
