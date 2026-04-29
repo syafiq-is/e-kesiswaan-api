@@ -12,8 +12,9 @@ export const getAllStatistics = async (req, res) => {
     // [1] Total Siswa
     const [totalSiswa] = await db.query(
       `SELECT COUNT(*) AS total_siswa
-       FROM siswa
-       WHERE id_tahun_ajaran = ?`,
+       FROM siswa s
+       JOIN siswa_tahun_ajaran sta ON sta.id_siswa = s.id
+       WHERE sta.id_tahun_ajaran = ?`,
       [id_tahun_ajaran],
     );
 
@@ -67,10 +68,11 @@ export const getAllStatistics = async (req, res) => {
       `SELECT
           s.id,
           s.nama,
-          s.kelas,
+          sta.kelas,
           TIME(a.created_at) AS jam_masuk
        FROM absensi a
        JOIN siswa s ON s.id = a.id_siswa
+       JOIN siswa_tahun_ajaran sta ON sta.id_siswa = s.id
        WHERE DATE(a.created_at) = CURDATE()
        AND a.id_tahun_ajaran = ?
        AND TIME(a.created_at) > (
@@ -182,9 +184,10 @@ export const getRekapKehadiran = async (req, res) => {
         UNION ALL SELECT 9
       ) t
 
-      LEFT JOIN siswa s
-        ON LEFT(s.kelas,1) = t.tingkat
-        AND s.id_tahun_ajaran = ?
+      LEFT JOIN siswa s 
+      JOIN siswa_tahun_ajaran sta ON sta.id_siswa = s.id
+        ON LEFT(sta.kelas,1) = t.tingkat
+        AND sta.id_tahun_ajaran = ?
 
       LEFT JOIN (
         SELECT

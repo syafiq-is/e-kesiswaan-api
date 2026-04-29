@@ -3,30 +3,61 @@ import db from "../lib/database.js";
 /* Get All Prestasi */
 export const getAllPrestasi = async (req, res) => {
   try {
-    const { page = 1, limit = 10, tahun_ajaran, semester } = req.query;
+    const {
+      page = 1,
+      limit = 10,
+      tahun_ajaran,
+      semester,
+      tingkat,
+      kelas,
+      search,
+      date,
+    } = req.query;
+
+    // Required Field
+    if (!tahun_ajaran || !semester)
+      return res.status(400).json({ message: "Required fields missing" });
 
     const pageNumber = parseInt(page);
     const limitNumber = parseInt(limit);
     const offset = (pageNumber - 1) * limitNumber;
 
-    let whereClause = "WHERE 1=1";
-    const filterValues = [];
+    // Query Builder
+    let whereClause = "WHERE 1=1 AND ta.tahun_ajaran = ? AND ta.semester = ?";
+    const filterValues = [tahun_ajaran, semester];
 
-    // Filter tahun ajaran & semester
-    if (tahun_ajaran) {
-      whereClause += " AND ta.tahun_ajaran = ?";
-      filterValues.push(tahun_ajaran);
+    // Filter tingkat
+    if (tingkat) {
+      whereClause += " AND (sta.kelas LIKE ?)";
+      filterValues.push(`%${tingkat}%`);
+    }
 
-      if (semester) {
-        whereClause += " AND ta.semester = ?";
-        filterValues.push(semester);
-      }
+    // Filter by kelas
+    if (kelas) {
+      whereClause += " AND sta.kelas = ?";
+      filterValues.push(kelas);
+    }
+
+    // Search by Nama / NISN
+    if (search) {
+      whereClause += " AND (s.nama LIKE ? OR s.nisn LIKE ?)";
+      filterValues.push(`%${search}%`, `%${search}%`);
+    }
+
+    // Filter date
+    if (date) {
+      whereClause += `
+        AND p.tanggal >= ?
+        AND p.tanggal < DATE_ADD(?, INTERVAL 1 DAY)
+      `;
+      filterValues.push(date, date);
     }
 
     const countQuery = `
       SELECT COUNT(*) as total
       FROM prestasi_siswa p
       JOIN siswa s ON p.id_siswa = s.id
+      JOIN siswa_tahun_ajaran sta ON sta.id_siswa = s.id
       JOIN tahun_ajaran ta ON p.id_tahun_ajaran = ta.id
       ${whereClause}
     `;
@@ -44,10 +75,12 @@ export const getAllPrestasi = async (req, res) => {
         p.gambar,
         s.nama AS nama_siswa,
         s.nisn,
+        sta.kelas,
         ta.tahun_ajaran,
         ta.semester
       FROM prestasi_siswa p
       JOIN siswa s ON p.id_siswa = s.id
+      JOIN siswa_tahun_ajaran sta ON sta.id_siswa = s.id
       JOIN tahun_ajaran ta ON p.id_tahun_ajaran = ta.id
       ${whereClause}
       ORDER BY p.tanggal DESC
@@ -70,33 +103,6 @@ export const getAllPrestasi = async (req, res) => {
         totalPages: Math.ceil(total / limitNumber),
       },
     });
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ message: "Server error" });
-  }
-};
-
-/* Get Prestasi by ID */
-export const getPrestasiById = async (req, res) => {
-  try {
-    const [rows] = await db.query(
-      `
-      SELECT 
-        p.*,
-        s.nama,
-        s.kelas
-      FROM prestasi_siswa p
-      JOIN siswa s ON p.id_siswa = s.id
-      WHERE p.id = ?
-      `,
-      [req.params.id],
-    );
-
-    if (!rows.length) {
-      return res.status(404).json({ message: "Prestasi not found" });
-    }
-
-    res.json(rows[0]);
   } catch (err) {
     console.error(err);
     res.status(500).json({ message: "Server error" });

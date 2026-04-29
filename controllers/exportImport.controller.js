@@ -102,25 +102,25 @@ const usePDFTemplate = (data) => {
 /* Export Excel Functions */
 export const exportRekapKehadiranExcel = async (req, res) => {
   try {
-    const { tahun_ajaran, semester, kelas } = req.query;
+    const { tahun_ajaran, semester, tingkat, kelas } = req.query;
 
-    let whereClause = "WHERE 1=1";
-    const filterValues = [];
+    // Required Field
+    if (!tahun_ajaran || !semester)
+      return res.status(400).json({ message: "Required fields missing" });
 
-    // Filter tahun ajaran & semester
-    if (tahun_ajaran) {
-      whereClause += " AND ta.tahun_ajaran = ?";
-      filterValues.push(tahun_ajaran);
+    // Query Builder
+    let whereClause = "WHERE 1=1 AND ta.tahun_ajaran = ? AND ta.semester = ?";
+    const filterValues = [tahun_ajaran, semester];
 
-      if (semester) {
-        whereClause += " AND ta.semester = ?";
-        filterValues.push(semester);
-      }
+    // Filter tingkat
+    if (tingkat) {
+      whereClause += " AND (sta.kelas LIKE ?)";
+      filterValues.push(`%${tingkat}%`);
     }
 
     // Filter kelas
     if (kelas) {
-      whereClause += " AND s.kelas = ?";
+      whereClause += " AND sta.kelas = ?";
       filterValues.push(kelas);
     }
 
@@ -130,7 +130,7 @@ export const exportRekapKehadiranExcel = async (req, res) => {
         s.nisn,
         s.nama,
         s.jenis_kelamin,
-        s.kelas,
+        sta.kelas,
 
         COALESCE(a.total_hadir,0) AS total_hadir,
         COALESCE(a.total_terlambat,0) AS total_terlambat,
@@ -140,7 +140,8 @@ export const exportRekapKehadiranExcel = async (req, res) => {
         COALESCE(p.total_alpha,0) AS total_alpha
 
       FROM siswa s
-      JOIN tahun_ajaran ta ON s.id_tahun_ajaran = ta.id
+      JOIN siswa_tahun_ajaran sta ON sta.id_siswa = s.id
+      JOIN tahun_ajaran ta ON sta.id_tahun_ajaran = ta.id
 
       LEFT JOIN (
         SELECT
@@ -163,7 +164,7 @@ export const exportRekapKehadiranExcel = async (req, res) => {
 
       ${whereClause}
 
-      ORDER BY s.kelas ASC;
+      ORDER BY sta.kelas ASC;
     `,
       filterValues,
     );
@@ -205,28 +206,27 @@ export const exportRekapKehadiranExcel = async (req, res) => {
 
 export const exportPelanggaranExcel = async (req, res) => {
   try {
-    const { tahun_ajaran, semester, kelas } = req.query;
+    const { tahun_ajaran, semester, tingkat, kelas } = req.query;
 
-    let whereClause = "WHERE 1=1";
-    const filterValues = [];
+    // Required Field
+    if (!tahun_ajaran || !semester)
+      return res.status(400).json({ message: "Required fields missing" });
 
-    // Filter tahun ajaran & semester
-    if (tahun_ajaran) {
-      whereClause += " AND ta.tahun_ajaran = ?";
-      filterValues.push(tahun_ajaran);
+    // Query Builder
+    let whereClause = "WHERE 1=1 AND ta.tahun_ajaran = ? AND ta.semester = ?";
+    const filterValues = [tahun_ajaran, semester];
 
-      if (semester) {
-        whereClause += " AND ta.semester = ?";
-        filterValues.push(semester);
-      }
+    // Filter tingkat
+    if (tingkat) {
+      whereClause += " AND (sta.kelas LIKE ?)";
+      filterValues.push(`%${tingkat}%`);
     }
 
     // Filter kelas
     if (kelas) {
-      whereClause += " AND s.kelas = ?";
+      whereClause += " AND sta.kelas = ?";
       filterValues.push(kelas);
     }
-
     const [rows] = await db.query(
       `
       SELECT
@@ -238,12 +238,13 @@ export const exportPelanggaranExcel = async (req, res) => {
         s.nama_wali,
         s.jenis_kelamin,
         s.nisn,
-        s.kelas,
+        sta.kelas,
         jp.pelanggaran,
         jp.poin
       FROM pelanggaran_siswa ps
       JOIN tahun_ajaran ta ON ps.id_tahun_ajaran = ta.id
       JOIN siswa s ON ps.id_siswa = s.id
+      JOIN siswa_tahun_ajaran sta ON sta.id_siswa = s.id
       JOIN jenis_pelanggaran jp ON ps.id_jenis_pelanggaran = jp.id
       ${whereClause}
       ORDER BY jp.poin DESC
@@ -286,25 +287,25 @@ export const exportPelanggaranExcel = async (req, res) => {
 
 export const exportPrestasiExcel = async (req, res) => {
   try {
-    const { tahun_ajaran, semester, kelas } = req.query;
+    const { tahun_ajaran, semester, tingkat, kelas } = req.query;
 
-    let whereClause = "WHERE 1=1";
-    const filterValues = [];
+    // Required Field
+    if (!tahun_ajaran || !semester)
+      return res.status(400).json({ message: "Required fields missing" });
 
-    // Filter tahun ajaran & semester
-    if (tahun_ajaran) {
-      whereClause += " AND ta.tahun_ajaran = ?";
-      filterValues.push(tahun_ajaran);
+    // Query Builder
+    let whereClause = "WHERE 1=1 AND ta.tahun_ajaran = ? AND ta.semester = ?";
+    const filterValues = [tahun_ajaran, semester];
 
-      if (semester) {
-        whereClause += " AND ta.semester = ?";
-        filterValues.push(semester);
-      }
+    // Filter tingkat
+    if (tingkat) {
+      whereClause += " AND (sta.kelas LIKE ?)";
+      filterValues.push(`%${tingkat}%`);
     }
 
     // Filter kelas
     if (kelas) {
-      whereClause += " AND s.kelas = ?";
+      whereClause += " AND sta.kelas = ?";
       filterValues.push(kelas);
     }
 
@@ -321,6 +322,7 @@ export const exportPrestasiExcel = async (req, res) => {
         ta.tahun_ajaran
       FROM prestasi_siswa p
       JOIN siswa s ON p.id_siswa = s.id
+      JOIN siswa_tahun_ajaran sta ON sta.id_siswa = s.id
       JOIN tahun_ajaran ta ON p.id_tahun_ajaran = ta.id
       ${whereClause}
       ORDER BY p.tanggal DESC
@@ -364,51 +366,61 @@ export const exportPrestasiExcel = async (req, res) => {
 
 export const exportSiswaExcel = async (req, res) => {
   try {
-    const { tahun_ajaran, semester, kelas } = req.query;
+    const { tahun_ajaran, semester, tingkat, kelas } = req.query;
 
-    let whereClause = "WHERE 1=1";
-    const filterValues = [];
+    // Required Field
+    if (!tahun_ajaran || !semester)
+      return res.status(400).json({ message: "Required fields missing" });
 
-    // Filter tahun ajaran & semester
-    if (tahun_ajaran) {
-      whereClause += " AND ta.tahun_ajaran = ?";
-      filterValues.push(tahun_ajaran);
+    // Query Builder
+    let whereClause = "WHERE 1=1 AND ta.tahun_ajaran = ? AND ta.semester = ?";
+    const filterValues = [tahun_ajaran, semester];
 
-      if (semester) {
-        whereClause += " AND ta.semester = ?";
-        filterValues.push(semester);
-      }
+    // Filter tingkat
+    if (tingkat) {
+      whereClause += " AND (sta.kelas LIKE ?)";
+      filterValues.push(`%${tingkat}%`);
     }
 
     // Filter kelas
     if (kelas) {
-      whereClause += " AND s.kelas = ?";
+      whereClause += " AND sta.kelas = ?";
       filterValues.push(kelas);
     }
 
     const [rows] = await db.query(
-      `SELECT 
-        nama,
-        nis,
-        nisn,
-        kelas,
-        jenis_kelamin,
-        tempat_lahir,
-        tanggal_lahir,
-        alamat,
-        nama_ayah,
-        pekerjaan_ayah,
-        nama_ibu,
-        pekerjaan_ibu,
-        nama_wali,
-        pekerjaan_wali,
-        no_telepon,
-        penghasilan_orang_tua,
+      `SELECT
+        s.id,
+        sta.kelas,
+        s.nama,
+        s.nipd,
+        s.nik,
+        s.nisn,
+        s.agama,
+        s.jenis_kelamin,
+        s.tempat_lahir,
+        s.tanggal_lahir,
+        s.nama_ayah,
+        s.pekerjaan_ayah,
+        s.nama_ibu,
+        s.pekerjaan_ibu,
+        s.nama_wali,
+        s.pekerjaan_wali,
+        s.no_telepon,
+        s.alamat,
+        s.rt,
+        s.rw,
+        s.dusun,
+        s.kelurahan,
+        s.kecamatan,
+        s.kode_pos,
+        s.gambar,
         ta.tahun_ajaran
-      FROM siswa s
-      JOIN tahun_ajaran ta ON s.id_tahun_ajaran = ta.id
+      FROM siswa s 
+      JOIN siswa_tahun_ajaran sta ON sta.id_siswa = s.id
+      JOIN tahun_ajaran ta ON sta.id_tahun_ajaran = ta.id
       ${whereClause}
-      ORDER BY s.kelas ASC, s.nama ASC`,
+      ORDER BY sta.kelas ASC, s.nama ASC`,
       filterValues,
     );
 
@@ -419,13 +431,21 @@ export const exportSiswaExcel = async (req, res) => {
     // Define columns
     worksheet.columns = [
       { header: "Nama", key: "nama", width: 25 },
-      { header: "NIS", key: "nis", width: 15 }, // 🔥 ADD THIS
+      { header: "NIPD", key: "nipd", width: 15 },
+      { header: "NIK", key: "nik", width: 20 },
       { header: "NISN", key: "nisn", width: 15 },
       { header: "Kelas", key: "kelas", width: 10 },
       { header: "Jenis Kelamin", key: "jenis_kelamin", width: 15 },
+      { header: "Agama", key: "agama", width: 15 },
       { header: "Tempat Lahir", key: "tempat_lahir", width: 20 },
       { header: "Tanggal Lahir", key: "tanggal_lahir", width: 15 },
       { header: "Alamat", key: "alamat", width: 30 },
+      { header: "RT", key: "rt", width: 8 },
+      { header: "RW", key: "rw", width: 8 },
+      { header: "Dusun", key: "dusun", width: 20 },
+      { header: "Kelurahan", key: "kelurahan", width: 20 },
+      { header: "Kecamatan", key: "kecamatan", width: 20 },
+      { header: "Kode Pos", key: "kode_pos", width: 12 },
       { header: "Nama Ayah", key: "nama_ayah", width: 20 },
       { header: "Pekerjaan Ayah", key: "pekerjaan_ayah", width: 20 },
       { header: "Nama Ibu", key: "nama_ibu", width: 20 },
@@ -433,12 +453,7 @@ export const exportSiswaExcel = async (req, res) => {
       { header: "Nama Wali", key: "nama_wali", width: 20 },
       { header: "Pekerjaan Wali", key: "pekerjaan_wali", width: 20 },
       { header: "No Telepon", key: "no_telepon", width: 15 },
-      {
-        header: "Penghasilan Orang Tua",
-        key: "penghasilan_orang_tua",
-        width: 20,
-      },
-      { header: "Tahun Ajaran", key: "tahun_ajaran", width: 15 },
+      { header: "Tahun Ajaran", key: "tahun_ajaran", width: 20 },
     ];
 
     // Add rows
@@ -474,26 +489,29 @@ export const exportSiswaExcelTemplate = async (req, res) => {
 
     worksheet.columns = [
       { header: "Nama", key: "nama", width: 25 },
-      { header: "NIS", key: "nis", width: 15 },
+      { header: "NIPD", key: "nipd", width: 15 },
+      { header: "NIK", key: "nik", width: 20 },
       { header: "NISN", key: "nisn", width: 15 },
-      { header: "Kelas", key: "kelas", width: 15 },
-      { header: "Jenis Kelamin (L/P)", key: "jenis_kelamin", width: 20 },
+      { header: "Kelas", key: "kelas", width: 10 },
+      { header: "Jenis Kelamin", key: "jenis_kelamin", width: 15 },
+      { header: "Agama", key: "agama", width: 15 },
       { header: "Tempat Lahir", key: "tempat_lahir", width: 20 },
-      { header: "Tanggal Lahir (YYYY-MM-DD)", key: "tanggal_lahir", width: 22 },
+      { header: "Tanggal Lahir", key: "tanggal_lahir", width: 15 },
       { header: "Alamat", key: "alamat", width: 30 },
+      { header: "RT", key: "rt", width: 8 },
+      { header: "RW", key: "rw", width: 8 },
+      { header: "Dusun", key: "dusun", width: 20 },
+      { header: "Kelurahan", key: "kelurahan", width: 20 },
+      { header: "Kecamatan", key: "kecamatan", width: 20 },
+      { header: "Kode Pos", key: "kode_pos", width: 12 },
       { header: "Nama Ayah", key: "nama_ayah", width: 20 },
       { header: "Pekerjaan Ayah", key: "pekerjaan_ayah", width: 20 },
       { header: "Nama Ibu", key: "nama_ibu", width: 20 },
       { header: "Pekerjaan Ibu", key: "pekerjaan_ibu", width: 20 },
       { header: "Nama Wali", key: "nama_wali", width: 20 },
       { header: "Pekerjaan Wali", key: "pekerjaan_wali", width: 20 },
-      { header: "No Telepon", key: "no_telepon", width: 18 },
-      {
-        header: "Penghasilan Orang Tua",
-        key: "penghasilan_orang_tua",
-        width: 22,
-      },
-      { header: "Tahun Ajaran", key: "tahun_ajaran", width: 15 },
+      { header: "No Telepon", key: "no_telepon", width: 15 },
+      { header: "Tahun Ajaran", key: "tahun_ajaran", width: 20 },
     ];
 
     // Make header bold
@@ -520,25 +538,25 @@ export const exportSiswaExcelTemplate = async (req, res) => {
 /* Export PDF Functions */
 export const exportRekapKehadiranPDF = async (req, res) => {
   try {
-    const { tahun_ajaran, semester, kelas } = req.query;
+    const { tahun_ajaran, semester, tingkat, kelas } = req.query;
 
-    let whereClause = "WHERE 1=1";
-    const filterValues = [];
+    // Required Field
+    if (!tahun_ajaran || !semester)
+      return res.status(400).json({ message: "Required fields missing" });
 
-    // Filter tahun ajaran & semester
-    if (tahun_ajaran) {
-      whereClause += " AND ta.tahun_ajaran = ?";
-      filterValues.push(tahun_ajaran);
+    // Query Builder
+    let whereClause = "WHERE 1=1 AND ta.tahun_ajaran = ? AND ta.semester = ?";
+    const filterValues = [tahun_ajaran, semester];
 
-      if (semester) {
-        whereClause += " AND ta.semester = ?";
-        filterValues.push(semester);
-      }
+    // Filter tingkat
+    if (tingkat) {
+      whereClause += " AND (sta.kelas LIKE ?)";
+      filterValues.push(`%${tingkat}%`);
     }
 
     // Filter kelas
     if (kelas) {
-      whereClause += " AND s.kelas = ?";
+      whereClause += " AND sta.kelas = ?";
       filterValues.push(kelas);
     }
 
@@ -548,7 +566,7 @@ export const exportRekapKehadiranPDF = async (req, res) => {
         s.nisn,
         s.nama,
         s.jenis_kelamin,
-        s.kelas,
+        sta.kelas,
 
         COALESCE(a.total_hadir,0) AS total_hadir,
         COALESCE(a.total_terlambat,0) AS total_terlambat,
@@ -558,7 +576,8 @@ export const exportRekapKehadiranPDF = async (req, res) => {
         COALESCE(p.total_alpha,0) AS total_alpha
 
       FROM siswa s
-      JOIN tahun_ajaran ta ON s.id_tahun_ajaran = ta.id
+      JOIN siswa_tahun_ajaran sta ON sta.id_siswa = s.id
+      JOIN tahun_ajaran ta ON sta.id_tahun_ajaran = ta.id
 
       LEFT JOIN (
         SELECT
@@ -581,7 +600,7 @@ export const exportRekapKehadiranPDF = async (req, res) => {
 
       ${whereClause}
 
-      ORDER BY s.kelas ASC;
+      ORDER BY sta.kelas ASC;
     `,
       filterValues,
     );
@@ -643,25 +662,25 @@ export const exportRekapKehadiranPDF = async (req, res) => {
 
 export const exportPelanggaranPDF = async (req, res) => {
   try {
-    const { tahun_ajaran, semester, kelas } = req.query;
+    const { tahun_ajaran, semester, tingkat, kelas } = req.query;
 
-    let whereClause = "WHERE 1=1";
-    const filterValues = [];
+    // Required Field
+    if (!tahun_ajaran || !semester)
+      return res.status(400).json({ message: "Required fields missing" });
 
-    // Filter tahun ajaran & semester
-    if (tahun_ajaran) {
-      whereClause += " AND ta.tahun_ajaran = ?";
-      filterValues.push(tahun_ajaran);
+    // Query Builder
+    let whereClause = "WHERE 1=1 AND ta.tahun_ajaran = ? AND ta.semester = ?";
+    const filterValues = [tahun_ajaran, semester];
 
-      if (semester) {
-        whereClause += " AND ta.semester = ?";
-        filterValues.push(semester);
-      }
+    // Filter tingkat
+    if (tingkat) {
+      whereClause += " AND (sta.kelas LIKE ?)";
+      filterValues.push(`%${tingkat}%`);
     }
 
     // Filter kelas
     if (kelas) {
-      whereClause += " AND s.kelas = ?";
+      whereClause += " AND sta.kelas = ?";
       filterValues.push(kelas);
     }
 
@@ -672,12 +691,13 @@ export const exportPelanggaranPDF = async (req, res) => {
         ps.keterangan,
         s.nama AS nama_siswa,
         s.nisn,
-        s.kelas,
+        sta.kelas,
         jp.pelanggaran,
         jp.poin
       FROM pelanggaran_siswa ps
       JOIN tahun_ajaran ta ON ps.id_tahun_ajaran = ta.id
       JOIN siswa s ON ps.id_siswa = s.id
+      JOIN siswa_tahun_ajaran sta ON sta.id_siswa = s.id
       JOIN jenis_pelanggaran jp ON ps.id_jenis_pelanggaran = jp.id
       ${whereClause}
       ORDER BY jp.poin DESC
@@ -738,25 +758,25 @@ export const exportPelanggaranPDF = async (req, res) => {
 
 export const exportPrestasiPDF = async (req, res) => {
   try {
-    const { tahun_ajaran, semester, kelas } = req.query;
+    const { tahun_ajaran, semester, tingkat, kelas } = req.query;
 
-    let whereClause = "WHERE 1=1";
-    const filterValues = [];
+    // Required Field
+    if (!tahun_ajaran || !semester)
+      return res.status(400).json({ message: "Required fields missing" });
 
-    // Filter tahun ajaran & semester
-    if (tahun_ajaran) {
-      whereClause += " AND ta.tahun_ajaran = ?";
-      filterValues.push(tahun_ajaran);
+    // Query Builder
+    let whereClause = "WHERE 1=1 AND ta.tahun_ajaran = ? AND ta.semester = ?";
+    const filterValues = [tahun_ajaran, semester];
 
-      if (semester) {
-        whereClause += " AND ta.semester = ?";
-        filterValues.push(semester);
-      }
+    // Filter tingkat
+    if (tingkat) {
+      whereClause += " AND (sta.kelas LIKE ?)";
+      filterValues.push(`%${tingkat}%`);
     }
 
     // Filter kelas
     if (kelas) {
-      whereClause += " AND s.kelas = ?";
+      whereClause += " AND sta.kelas = ?";
       filterValues.push(kelas);
     }
 
@@ -773,6 +793,7 @@ export const exportPrestasiPDF = async (req, res) => {
         ta.tahun_ajaran
       FROM prestasi_siswa p
       JOIN siswa s ON p.id_siswa = s.id
+      JOIN siswa_tahun_ajaran sta ON sta.id_siswa = s.id
       JOIN tahun_ajaran ta ON p.id_tahun_ajaran = ta.id
       ${whereClause}
       ORDER BY p.tanggal DESC
@@ -839,52 +860,71 @@ export const importSiswaExcel = async (req, res) => {
 
   try {
     if (!req.file) {
-      return res.status(400).json({ message: "Excel file is required" });
+      return res.status(400).json({
+        message: "Excel file is required",
+      });
     }
 
     const workbook = new ExcelJS.Workbook();
     await workbook.xlsx.load(req.file.buffer);
+
     const worksheet = workbook.getWorksheet(1);
 
-    const dataToInsert = [];
+    const siswaData = [];
     const errors = [];
-    const nisSet = new Set();
+
+    const nipdSet = new Set();
     const nisnSet = new Set();
+
     const tahunAjaranCache = new Map();
 
     const rows = worksheet.getRows(2, worksheet.rowCount - 1);
 
     for (let i = 0; i < rows.length; i++) {
       const rowNumber = i + 2;
+
       const v = rows[i].values;
 
       if (!v || v.length <= 1) continue;
 
       const nama = v[1]?.toString().trim();
-      const nis = v[2]?.toString().trim();
-      const nisn = v[3]?.toString().trim();
-      const kelas = v[4]?.toString().trim();
-      const jenis_kelamin = v[5]?.toString().trim();
-      const tempat_lahir = v[6]?.toString().trim() || null;
-      const tanggal_lahir = v[7] || null;
-      const alamat = v[8]?.toString().trim() || null;
-      const nama_ayah = v[9]?.toString().trim() || null;
-      const pekerjaan_ayah = v[10]?.toString().trim() || null;
-      const nama_ibu = v[11]?.toString().trim() || null;
-      const pekerjaan_ibu = v[12]?.toString().trim() || null;
-      const nama_wali = v[13]?.toString().trim() || null;
-      const pekerjaan_wali = v[14]?.toString().trim() || null;
-      const no_telepon = v[15]?.toString().trim() || null;
-      const penghasilan_orang_tua = v[16] || 0;
-      const tahun_ajaran_nama = v[17]?.toString().trim();
+      const nipd = v[2]?.toString().trim();
+      const nik = v[3]?.toString().trim();
+      const nisn = v[4]?.toString().trim();
+      const kelas = v[5]?.toString().trim();
+      const jenis_kelamin = v[6]?.toString().trim();
+      const agama = v[7]?.toString().trim();
 
-      // ===== REQUIRED VALIDATION =====
+      const tempat_lahir = v[8]?.toString().trim() || null;
+      const tanggal_lahir = v[9] || null;
+      const alamat = v[10]?.toString().trim() || null;
+      const rt = v[11]?.toString().trim() || null;
+      const rw = v[12]?.toString().trim() || null;
+      const dusun = v[13]?.toString().trim() || null;
+      const kelurahan = v[14]?.toString().trim() || null;
+      const kecamatan = v[15]?.toString().trim() || null;
+      const kode_pos = v[16]?.toString().trim() || null;
+      const nama_ayah = v[17]?.toString().trim() || null;
+      const pekerjaan_ayah = v[18]?.toString().trim() || null;
+      const nama_ibu = v[19]?.toString().trim() || null;
+      const pekerjaan_ibu = v[20]?.toString().trim() || null;
+      const nama_wali = v[21]?.toString().trim() || null;
+      const pekerjaan_wali = v[22]?.toString().trim() || null;
+      const no_telepon = v[23]?.toString().trim() || null;
+      const tahun_ajaran_nama = v[24]?.toString().trim();
+
+      /* =========================
+         REQUIRED VALIDATION
+         ========================= */
+
       if (
         !nama ||
-        !nis ||
+        !nipd ||
+        !nik ||
         !nisn ||
         !kelas ||
         !jenis_kelamin ||
+        !agama ||
         !tahun_ajaran_nama
       ) {
         errors.push(`Row ${rowNumber}: Required fields missing`);
@@ -896,8 +936,13 @@ export const importSiswaExcel = async (req, res) => {
         continue;
       }
 
-      if (!/^\d+$/.test(nis)) {
-        errors.push(`Row ${rowNumber}: NIS must be numeric`);
+      if (!/^\d+$/.test(nipd)) {
+        errors.push(`Row ${rowNumber}: NIPD must be numeric`);
+        continue;
+      }
+
+      if (!/^\d+$/.test(nik)) {
+        errors.push(`Row ${rowNumber}: NIK must be numeric`);
         continue;
       }
 
@@ -906,8 +951,8 @@ export const importSiswaExcel = async (req, res) => {
         continue;
       }
 
-      if (nisSet.has(nis)) {
-        errors.push(`Row ${rowNumber}: Duplicate NIS in file`);
+      if (nipdSet.has(nipd)) {
+        errors.push(`Row ${rowNumber}: Duplicate NIPD in file`);
         continue;
       }
 
@@ -916,17 +961,24 @@ export const importSiswaExcel = async (req, res) => {
         continue;
       }
 
-      nisSet.add(nis);
+      nipdSet.add(nipd);
       nisnSet.add(nisn);
 
-      // ===== VALIDATE TAHUN AJARAN =====
+      /* =========================
+         VALIDATE TAHUN AJARAN
+         ========================= */
+
       let id_tahun_ajaran;
 
       if (tahunAjaranCache.has(tahun_ajaran_nama)) {
         id_tahun_ajaran = tahunAjaranCache.get(tahun_ajaran_nama);
       } else {
         const [tahunRows] = await connection.query(
-          "SELECT id FROM tahun_ajaran WHERE tahun_ajaran = ?",
+          `
+            SELECT id
+            FROM tahun_ajaran
+            WHERE tahun_ajaran = ?
+          `,
           [tahun_ajaran_nama],
         );
 
@@ -936,19 +988,27 @@ export const importSiswaExcel = async (req, res) => {
         }
 
         id_tahun_ajaran = tahunRows[0].id;
+
         tahunAjaranCache.set(tahun_ajaran_nama, id_tahun_ajaran);
       }
 
-      dataToInsert.push([
-        id_tahun_ajaran,
+      siswaData.push({
         nama,
-        nis,
+        nipd,
+        nik,
         nisn,
         kelas,
         jenis_kelamin,
+        agama,
         tempat_lahir,
         tanggal_lahir,
         alamat,
+        rt,
+        rw,
+        dusun,
+        kelurahan,
+        kecamatan,
+        kode_pos,
         nama_ayah,
         pekerjaan_ayah,
         nama_ibu,
@@ -956,8 +1016,8 @@ export const importSiswaExcel = async (req, res) => {
         nama_wali,
         pekerjaan_wali,
         no_telepon,
-        penghasilan_orang_tua,
-      ]);
+        id_tahun_ajaran,
+      });
     }
 
     if (errors.length > 0) {
@@ -967,59 +1027,132 @@ export const importSiswaExcel = async (req, res) => {
       });
     }
 
-    if (dataToInsert.length === 0) {
-      return res.status(400).json({ message: "No valid data found" });
+    if (siswaData.length === 0) {
+      return res.status(400).json({
+        message: "No valid data found",
+      });
     }
 
-    // DB duplicate check
+    /* =========================
+       CHECK DUPLICATES DB
+       ========================= */
+
     const [existing] = await connection.query(
-      `SELECT nis, nisn FROM siswa 
-       WHERE nis IN (?) OR nisn IN (?)`,
-      [[...nisSet], [...nisnSet]],
+      `
+      SELECT nipd, nisn
+      FROM siswa
+      WHERE nipd IN (?) OR nisn IN (?)
+    `,
+      [[...nipdSet], [...nisnSet]],
     );
 
     if (existing.length > 0) {
       return res.status(400).json({
-        message: "Duplicate NIS/NISN found in database",
+        message: "Duplicate NIPD/NISN found in database",
         duplicates: existing,
       });
     }
 
     await connection.beginTransaction();
 
+    /* =========================
+       INSERT SISWA
+       ========================= */
+
+    const siswaValues = siswaData.map((s) => [
+      s.nama,
+      s.nipd,
+      s.nik,
+      s.nisn,
+      s.jenis_kelamin,
+      s.agama,
+      s.tempat_lahir,
+      s.tanggal_lahir,
+      s.alamat,
+      s.rt,
+      s.rw,
+      s.dusun,
+      s.kelurahan,
+      s.kecamatan,
+      s.kode_pos,
+      s.nama_ayah,
+      s.pekerjaan_ayah,
+      s.nama_ibu,
+      s.pekerjaan_ibu,
+      s.nama_wali,
+      s.pekerjaan_wali,
+      s.no_telepon,
+    ]);
+
+    const [insertResult] = await connection.query(
+      `
+        INSERT INTO siswa (
+          nama,
+          nipd,
+          nik,
+          nisn,
+          jenis_kelamin,
+          agama,
+          tempat_lahir,
+          tanggal_lahir,
+          alamat,
+          rt,
+          rw,
+          dusun,
+          kelurahan,
+          kecamatan,
+          kode_pos,
+          nama_ayah,
+          pekerjaan_ayah,
+          nama_ibu,
+          pekerjaan_ibu,
+          nama_wali,
+          pekerjaan_wali,
+          no_telepon
+        ) VALUES ?
+      `,
+      [siswaValues],
+    );
+
+    /* =========================
+       INSERT SISWA TAHUN AJARAN
+       ========================= */
+
+    const firstInsertedId = insertResult.insertId;
+
+    const enrollmentValues = siswaData.map((s, index) => [
+      firstInsertedId + index,
+      s.id_tahun_ajaran,
+      s.kelas,
+      "aktif",
+    ]);
+
     await connection.query(
-      `INSERT INTO siswa (
+      `
+      INSERT INTO siswa_tahun_ajaran (
+        id_siswa,
         id_tahun_ajaran,
-        nama,
-        nis,
-        nisn,
         kelas,
-        jenis_kelamin,
-        tempat_lahir,
-        tanggal_lahir,
-        alamat,
-        nama_ayah,
-        pekerjaan_ayah,
-        nama_ibu,
-        pekerjaan_ibu,
-        nama_wali,
-        pekerjaan_wali,
-        no_telepon,
-        penghasilan_orang_tua
-      ) VALUES ?`,
-      [dataToInsert],
+        status
+      ) VALUES ?
+    `,
+      [enrollmentValues],
     );
 
     await connection.commit();
 
-    res.json({
+    return res.json({
       message: "Import successful",
-      total_inserted: dataToInsert.length,
+      total_inserted: siswaData.length,
     });
   } catch (error) {
     await connection.rollback();
+
     console.error(error);
-    res.status(500).json({ message: "Server error" });
+
+    return res.status(500).json({
+      message: "Server error",
+    });
   } finally {
     connection.release();
   }

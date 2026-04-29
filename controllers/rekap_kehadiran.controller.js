@@ -2,45 +2,71 @@ import db from "../lib/database.js";
 
 export const getRekapKehadiran = async (req, res) => {
   try {
-    const { page = 1, limit = 10, tahun_ajaran, semester, kelas } = req.query;
+    const {
+      page = 1,
+      limit = 10,
+      tahun_ajaran,
+      semester,
+      tingkat,
+      kelas,
+      search,
+      date,
+    } = req.query;
+
+    // Required Field
+    if (!tahun_ajaran || !semester)
+      return res.status(400).json({ message: "Required fields missing" });
 
     const pageNumber = parseInt(page);
     const limitNumber = parseInt(limit);
     const offset = (pageNumber - 1) * limitNumber;
 
-    let whereClause = "WHERE 1=1";
-    const filterValues = [];
+    // Query Builder
+    let whereClause = "WHERE 1=1 AND ta.tahun_ajaran = ? AND ta.semester = ?";
+    const filterValues = [tahun_ajaran, semester];
 
-    // Filter tahun ajaran & semester
-    if (tahun_ajaran) {
-      whereClause += " AND ta.tahun_ajaran = ?";
-      filterValues.push(tahun_ajaran);
-
-      if (semester) {
-        whereClause += " AND ta.semester = ?";
-        filterValues.push(semester);
-      }
+    // Filter tingkat
+    if (tingkat) {
+      whereClause += " AND (sta.kelas LIKE ?)";
+      filterValues.push(`%${tingkat}%`);
     }
 
-    // Optional filter kelas
+    // Filter kelas
     if (kelas) {
-      whereClause += " AND s.kelas = ?";
+      whereClause += " AND sta.kelas = ?";
       filterValues.push(kelas);
+    }
+
+    // Search by Nama / NISN
+    if (search) {
+      whereClause += " AND (s.nama LIKE ? OR s.nisn LIKE ?)";
+      filterValues.push(`%${search}%`, `%${search}%`);
+    }
+
+    // Filter date
+    if (date) {
+      whereClause += `
+        AND a.created_at >= ?
+        AND a.created_at < DATE_ADD(?, INTERVAL 1 DAY)
+      `;
+      filterValues.push(date, date);
     }
 
     const countQuery = `
       SELECT COUNT(DISTINCT s.id) AS total
       FROM siswa s
-      JOIN tahun_ajaran ta ON s.id_tahun_ajaran = ta.id
+      JOIN siswa_tahun_ajaran sta ON sta.id_siswa = s.id
+      JOIN tahun_ajaran ta ON sta.id_tahun_ajaran = ta.id
       ${whereClause}
     `;
 
     const dataQuery = `
       SELECT
+        s.id,
         s.nisn,
         s.nama,
         s.jenis_kelamin,
-        s.kelas,
+        sta.kelas,
 
         COALESCE(a.total_hadir,0) AS total_hadir,
         COALESCE(a.total_terlambat,0) AS total_terlambat,
@@ -49,7 +75,9 @@ export const getRekapKehadiran = async (req, res) => {
         COALESCE(p.total_sakit,0) AS total_sakit,
         COALESCE(p.total_alpha,0) AS total_alpha
 
-      FROM siswa s
+      FROM siswa s 
+      JOIN siswa_tahun_ajaran sta ON sta.id_siswa = s.id
+      JOIN tahun_ajaran ta ON sta.id_tahun_ajaran = ta.id
 
       LEFT JOIN (
         SELECT
@@ -74,7 +102,6 @@ export const getRekapKehadiran = async (req, res) => {
         GROUP BY id_siswa
       ) p ON p.id_siswa = s.id
 
-      JOIN tahun_ajaran ta ON s.id_tahun_ajaran = ta.id
       ${whereClause}
 
       ORDER BY s.nama ASC

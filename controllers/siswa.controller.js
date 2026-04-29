@@ -8,35 +8,36 @@ export const getAllSiswa = async (req, res) => {
       limit = 10,
       tahun_ajaran,
       semester,
+      tingkat,
       kelas,
       search,
     } = req.query;
+
+    // Required Field
+    if (!tahun_ajaran || !semester)
+      return res.status(400).json({ message: "Required fields missing" });
 
     const pageNumber = parseInt(page);
     const limitNumber = parseInt(limit);
     const offset = (pageNumber - 1) * limitNumber;
 
-    let whereClause = "WHERE 1=1";
-    const filterValues = [];
+    // Query Builder
+    let whereClause = "WHERE 1=1 AND ta.tahun_ajaran = ? AND ta.semester = ?";
+    const filterValues = [tahun_ajaran, semester];
 
-    // Filter tahun ajaran & semester
-    if (tahun_ajaran) {
-      whereClause += " AND ta.tahun_ajaran = ?";
-      filterValues.push(tahun_ajaran);
-
-      if (semester) {
-        whereClause += " AND ta.semester = ?";
-        filterValues.push(semester);
-      }
+    // Filter tingkat
+    if (tingkat) {
+      whereClause += " AND (sta.kelas LIKE ?)";
+      filterValues.push(`%${tingkat}%`);
     }
 
     // Filter kelas
     if (kelas) {
-      whereClause += " AND s.kelas = ?";
+      whereClause += " AND sta.kelas = ?";
       filterValues.push(kelas);
     }
 
-    // Search nama / NISN
+    // Search by Nama / NISN
     if (search) {
       whereClause += " AND (s.nama LIKE ? OR s.nisn LIKE ?)";
       filterValues.push(`%${search}%`, `%${search}%`);
@@ -44,19 +45,20 @@ export const getAllSiswa = async (req, res) => {
 
     const countQuery = `
       SELECT COUNT(*) as total
-      FROM siswa s
-      JOIN tahun_ajaran ta ON s.id_tahun_ajaran = ta.id
+      FROM siswa s 
+      JOIN siswa_tahun_ajaran sta ON sta.id_siswa = s.id
+      JOIN tahun_ajaran ta ON sta.id_tahun_ajaran = ta.id
       ${whereClause}
     `;
 
     const dataQuery = `
       SELECT
         s.id,
+        sta.kelas,
         s.nama,
         s.nipd,
         s.nik,
         s.nisn,
-        s.kelas,
         s.agama,
         s.jenis_kelamin,
         s.tempat_lahir,
@@ -77,8 +79,9 @@ export const getAllSiswa = async (req, res) => {
         s.kode_pos,
         s.gambar,
         ta.tahun_ajaran
-      FROM siswa s
-      JOIN tahun_ajaran ta ON s.id_tahun_ajaran = ta.id
+      FROM siswa s 
+      JOIN siswa_tahun_ajaran sta ON sta.id_siswa = s.id
+      JOIN tahun_ajaran ta ON sta.id_tahun_ajaran = ta.id
       ${whereClause}
       ORDER BY s.nama ASC
       LIMIT ? OFFSET ?
@@ -109,7 +112,9 @@ export const getAllSiswa = async (req, res) => {
 /* Get All Kelas */
 export const getAllKelas = async (req, res) => {
   try {
-    const [rows] = await db.query(`SELECT DISTINCT kelas FROM siswa`);
+    const [rows] = await db.query(
+      `SELECT DISTINCT kelas FROM siswa_tahun_ajaran`,
+    );
     const kelasList = rows.map((r) => r.kelas);
 
     res.json({
@@ -120,27 +125,10 @@ export const getAllKelas = async (req, res) => {
     res.status(500).json({ message: "Server error" });
   }
 };
-
-/* Get Siswa by ID */
-export const getSiswaById = async (req, res) => {
-  try {
-    const [rows] = await db.query("SELECT * FROM siswa WHERE id = ?", [
-      req.params.id,
-    ]);
-
-    if (!rows.length) {
-      return res.status(404).json({ message: "Siswa not found" });
-    }
-
-    res.json(rows[0]);
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ message: "Server error" });
-  }
-};
-
 /* Create Siswa */
 export const createSiswa = async (req, res) => {
+  const connection = await db.getConnection();
+
   try {
     const {
       nama,
@@ -172,26 +160,42 @@ export const createSiswa = async (req, res) => {
     const gambarPath = req.file ? `uploads/${req.file.filename}` : null;
 
     if (!nama || !nipd || !nik || !nisn || !kelas || !jenis_kelamin || !agama) {
-      return res.status(400).json({ message: "Required fields missing" });
+      return res.status(400).json({
+        message: "Required fields missing",
+      });
     }
-
-    const [tahun_ajaran_aktif] = await db.query(
-      "SELECT id FROM tahun_ajaran WHERE status = 'aktif' LIMIT 1",
-    );
 
     if (!["L", "P"].includes(jenis_kelamin)) {
-      return res.status(400).json({ message: "Invalid jenis_kelamin" });
+      return res.status(400).json({
+        message: "Invalid jenis_kelamin",
+      });
     }
 
-    await db.query(
+    const [tahunAjaranAktif] = await connection.query(`
+      SELECT id
+      FROM tahun_ajaran
+      WHERE status = 'aktif'
+      LIMIT 1
+    `);
+
+    if (tahunAjaranAktif.length === 0) {
+      return res.status(400).json({
+        message: "No active academic year found",
+      });
+    }
+
+    const id_tahun_ajaran = tahunAjaranAktif[0].id;
+
+    await connection.beginTransaction();
+
+    /* INSERT SISWA */
+    const [result] = await connection.query(
       `
       INSERT INTO siswa (
-        id_tahun_ajaran,
         nama,
         nipd,
         nik,
         nisn,
-        kelas,
         agama,
         jenis_kelamin,
         tempat_lahir,
@@ -212,15 +216,13 @@ export const createSiswa = async (req, res) => {
         no_telepon,
         penghasilan_orang_tua,
         gambar
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `,
       [
-        tahun_ajaran_aktif[0].id,
         nama,
         nipd,
         nik,
         nisn,
-        kelas,
         agama,
         jenis_kelamin,
         tempat_lahir || null,
@@ -239,24 +241,53 @@ export const createSiswa = async (req, res) => {
         nama_wali || null,
         pekerjaan_wali || null,
         no_telepon || null,
-        penghasilan_orang_tua || null,
+        penghasilan_orang_tua || 0,
         gambarPath || null,
       ],
     );
 
-    res.status(201).json({ message: "Siswa created successfully" });
+    const id_siswa = result.insertId;
+
+    /* INSERT SISWA TAHUN AJARAN */
+    await connection.query(
+      `
+      INSERT INTO siswa_tahun_ajaran (
+        id_siswa,
+        id_tahun_ajaran,
+        kelas
+      ) VALUES (?, ?, ?)
+      `,
+      [id_siswa, id_tahun_ajaran, kelas],
+    );
+
+    await connection.commit();
+
+    return res.status(201).json({
+      message: "Siswa created successfully",
+    });
   } catch (err) {
+    await connection.rollback();
+
     if (err.code === "ER_DUP_ENTRY") {
-      return res.status(409).json({ message: "NISN already exists" });
+      return res.status(409).json({
+        message: "NIPD / NIK / NISN already exists",
+      });
     }
 
     console.error(err);
-    res.status(500).json({ message: "Server error" });
+
+    return res.status(500).json({
+      message: "Server error",
+    });
+  } finally {
+    connection.release();
   }
 };
 
 /* Update Siswa by ID */
 export const updateSiswaById = async (req, res) => {
+  const connection = await db.getConnection();
+
   try {
     const {
       nama,
@@ -288,21 +319,42 @@ export const updateSiswaById = async (req, res) => {
     const gambarPath = req.file ? `uploads/${req.file.filename}` : null;
 
     if (!nama || !nipd || !nik || !nisn || !kelas || !jenis_kelamin || !agama) {
-      return res.status(400).json({ message: "Required fields missing" });
+      return res.status(400).json({
+        message: "Required fields missing",
+      });
     }
 
-    if (jenis_kelamin && !["L", "P"].includes(jenis_kelamin)) {
-      return res.status(400).json({ message: "Invalid jenis_kelamin" });
+    if (!["L", "P"].includes(jenis_kelamin)) {
+      return res.status(400).json({
+        message: "Invalid jenis_kelamin",
+      });
     }
 
-    const [result] = await db.query(
+    const [tahunAjaranAktif] = await connection.query(`
+      SELECT id
+      FROM tahun_ajaran
+      WHERE status = 'aktif'
+      LIMIT 1
+    `);
+
+    if (tahunAjaranAktif.length === 0) {
+      return res.status(400).json({
+        message: "No active academic year found",
+      });
+    }
+
+    const id_tahun_ajaran = tahunAjaranAktif[0].id;
+
+    await connection.beginTransaction();
+
+    /* UPDATE SISWA */
+    const [result] = await connection.query(
       `
       UPDATE siswa SET
         nama = COALESCE(?, nama),
         nipd = COALESCE(?, nipd),
         nik = COALESCE(?, nik),
         nisn = COALESCE(?, nisn),
-        kelas = COALESCE(?, kelas),
         agama = COALESCE(?, agama),
         jenis_kelamin = COALESCE(?, jenis_kelamin),
         tempat_lahir = COALESCE(?, tempat_lahir),
@@ -323,14 +375,13 @@ export const updateSiswaById = async (req, res) => {
         no_telepon = COALESCE(?, no_telepon),
         penghasilan_orang_tua = COALESCE(?, penghasilan_orang_tua),
         gambar = COALESCE(?, gambar)
-        WHERE id = ?
+      WHERE id = ?
       `,
       [
         nama,
         nipd,
         nik,
         nisn,
-        kelas,
         agama,
         jenis_kelamin,
         tempat_lahir || null,
@@ -349,20 +400,70 @@ export const updateSiswaById = async (req, res) => {
         nama_wali || null,
         pekerjaan_wali || null,
         no_telepon || null,
-        penghasilan_orang_tua || null,
+        penghasilan_orang_tua || 0,
         gambarPath || null,
         req.params.id,
       ],
     );
 
     if (result.affectedRows === 0) {
-      return res.status(404).json({ message: "Siswa not found" });
+      await connection.rollback();
+
+      return res.status(404).json({
+        message: "Siswa not found",
+      });
     }
 
-    res.json({ message: "Siswa updated successfully" });
+    /* UPDATE KELAS ON ACTIVE YEAR */
+    const [existingSta] = await connection.query(
+      `
+      SELECT id
+      FROM siswa_tahun_ajaran
+      WHERE id_siswa = ?
+      AND id_tahun_ajaran = ?
+      LIMIT 1
+      `,
+      [req.params.id, id_tahun_ajaran],
+    );
+
+    if (existingSta.length > 0) {
+      await connection.query(
+        `
+        UPDATE siswa_tahun_ajaran
+        SET kelas = ?
+        WHERE id_siswa = ?
+        AND id_tahun_ajaran = ?
+        `,
+        [kelas, req.params.id, id_tahun_ajaran],
+      );
+    } else {
+      await connection.query(
+        `
+        INSERT INTO siswa_tahun_ajaran (
+          id_siswa,
+          id_tahun_ajaran,
+          kelas
+        ) VALUES (?, ?, ?)
+        `,
+        [req.params.id, id_tahun_ajaran, kelas],
+      );
+    }
+
+    await connection.commit();
+
+    return res.json({
+      message: "Siswa updated successfully",
+    });
   } catch (err) {
+    await connection.rollback();
+
     console.error(err);
-    res.status(500).json({ message: "Server error" });
+
+    return res.status(500).json({
+      message: "Server error",
+    });
+  } finally {
+    connection.release();
   }
 };
 

@@ -12,24 +12,6 @@ export const getAllConfig = async (req, res) => {
   }
 };
 
-/* Get Config by ID */
-export const getConfigById = async (req, res) => {
-  try {
-    const [rows] = await db.query("SELECT * FROM config WHERE id = ?", [
-      req.params.id,
-    ]);
-
-    if (!rows.length) {
-      return res.status(404).json({ message: "Config not found" });
-    }
-
-    res.json(rows[0]);
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ message: "Server error" });
-  }
-};
-
 /* Update Config by ID */
 export const updateConfigById = async (req, res) => {
   try {

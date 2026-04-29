@@ -5,23 +5,17 @@ export const getAllAbsensi = async (req, res) => {
   try {
     const { page = 1, limit = 10, tahun_ajaran, semester, date } = req.query;
 
+    // Required Field
+    if (!tahun_ajaran || !semester)
+      return res.status(400).json({ message: "Required fields missing" });
+
     const pageNumber = parseInt(page);
     const limitNumber = parseInt(limit);
     const offset = (pageNumber - 1) * limitNumber;
 
-    let whereClause = "WHERE 1=1";
-    const filterValues = [];
-
-    // Filter tahun ajaran & semester
-    if (tahun_ajaran) {
-      whereClause += " AND ta.tahun_ajaran = ?";
-      filterValues.push(tahun_ajaran);
-
-      if (semester) {
-        whereClause += " AND ta.semester = ?";
-        filterValues.push(semester);
-      }
-    }
+    // Query Builder
+    let whereClause = "WHERE 1=1 AND ta.tahun_ajaran = ? AND ta.semester = ?";
+    const filterValues = [tahun_ajaran, semester];
 
     // Filter date
     if (date) {
@@ -33,9 +27,10 @@ export const getAllAbsensi = async (req, res) => {
     }
 
     const countQuery = `
-      SELECT COUNT(*) as total 
+      SELECT COUNT(*) as total
       FROM absensi a
       JOIN siswa s ON a.id_siswa = s.id
+      JOIN siswa_tahun_ajaran sta ON sta.id_siswa = s.id
       JOIN tahun_ajaran ta ON a.id_tahun_ajaran = ta.id
       ${whereClause}
     `;
@@ -45,20 +40,68 @@ export const getAllAbsensi = async (req, res) => {
         a.id,
         a.created_at,
         a.tipe_absensi,
+        a.status,
+
         s.nama,
         s.nisn,
-        s.kelas,
+
+        sta.kelas,
+
         ta.tahun_ajaran,
-        ta.semester
+        ta.semester,
+
+        COALESCE(p.total_poin, 0) AS total_poin,
+        COALESCE(aaa.total_terlambat, 0) AS total_terlambat
+
       FROM absensi a
       JOIN siswa s ON a.id_siswa = s.id
       JOIN tahun_ajaran ta ON a.id_tahun_ajaran = ta.id
+      JOIN siswa_tahun_ajaran sta ON sta.id_siswa = s.id
+
+      /* TOTAL POIN */
+      LEFT JOIN (
+        SELECT 
+          ps.id_siswa,
+          ps.id_tahun_ajaran,
+          SUM(jp.poin) AS total_poin
+
+        FROM pelanggaran_siswa ps
+
+        JOIN jenis_pelanggaran jp
+          ON ps.id_jenis_pelanggaran = jp.id
+
+        GROUP BY ps.id_siswa, ps.id_tahun_ajaran
+      ) p 
+        ON p.id_siswa = s.id
+        AND p.id_tahun_ajaran = a.id_tahun_ajaran
+
+      /* TOTAL TERLAMBAT */
+      LEFT JOIN (
+        SELECT
+          a2.id_siswa,
+          a2.id_tahun_ajaran,
+
+          SUM(
+            a2.tipe_absensi = 'datang'
+            AND TIME(a2.created_at) > '07:00:00'
+          ) AS total_terlambat
+
+        FROM absensi a2
+
+        GROUP BY a2.id_siswa, a2.id_tahun_ajaran
+      ) aaa
+        ON aaa.id_siswa = s.id
+        AND aaa.id_tahun_ajaran = a.id_tahun_ajaran
+
       ${whereClause}
+
       ORDER BY a.created_at DESC
+
       LIMIT ? OFFSET ?
     `;
 
     const [[{ total }]] = await db.query(countQuery, filterValues);
+
     const [rows] = await db.query(dataQuery, [
       ...filterValues,
       limitNumber,
@@ -76,7 +119,7 @@ export const getAllAbsensi = async (req, res) => {
     });
   } catch (err) {
     console.error(err);
-    res.status(500).json({ message: "Server error" });
+    return res.status(500).json({ message: "Server error" });
   }
 };
 
@@ -101,12 +144,59 @@ export const createAbsensi = async (req, res) => {
       return res.status(404).json({ message: "Siswa not found" });
     }
 
-    await db.query(
-      `INSERT INTO absensi (id_siswa, id_tahun_ajaran, tipe_absensi) VALUES (?, ?, ?)`,
-      [siswa[0].id, tahun_ajaran_aktif[0].id, tipe_absensi],
+    // GET CONFIG
+    const [rows] = await db.query(
+      "SELECT config_key, config_value FROM config",
     );
 
-    res.status(201).json({ message: "Absensi created successfully" });
+    const config = {};
+    rows.forEach((row) => {
+      config[row.config_key] = row.config_value;
+    });
+
+    const now = new Date();
+    const currentTime = now.toTimeString().slice(0, 8);
+
+    const jamMasuk = config.jam_masuk;
+    const jamTerlambat = config.jam_terlambat;
+    const jamBolehPulang = config.jam_boleh_pulang;
+    const batasAkhirPulang = config.batas_akhir_pulang;
+
+    // ABSEN MASUK
+    if (tipe_absensi === "datang") {
+      if (currentTime < jamMasuk) {
+        return res.status(400).json({ message: "Belum waktunya absen masuk" });
+      }
+
+      const status = currentTime > jamTerlambat ? "terlambat" : "tepat_waktu";
+
+      await db.query(
+        `INSERT INTO absensi (id_siswa, id_tahun_ajaran, tipe_absensi, status) VALUES (?, ?, ?, ?)`,
+        [siswa[0].id, tahun_ajaran_aktif[0].id, tipe_absensi, status],
+      );
+
+      res.status(201).json({ message: "Absensi created successfully" });
+    }
+
+    // ABSEN PULANG
+    if (tipe_absensi === "pulang") {
+      if (currentTime < jamBolehPulang) {
+        return res.status(400).json({ message: "Belum waktunya absen pulang" });
+      }
+
+      if (currentTime > batasAkhirPulang) {
+        return res
+          .status(400)
+          .json({ message: "Sudah lewat batas absen pulang" });
+      }
+
+      await db.query(
+        `INSERT INTO absensi (id_siswa, id_tahun_ajaran, tipe_absensi, status) VALUES (?, ?, ?, ?)`,
+        [siswa[0].id, tahun_ajaran_aktif[0].id, tipe_absensi, status],
+      );
+
+      res.status(201).json({ message: "Absensi created successfully" });
+    }
   } catch (err) {
     console.error(err);
     res.status(500).json({ message: "Server error" });

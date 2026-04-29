@@ -3,20 +3,41 @@ import db from "../lib/database.js";
 /* Get All Perizinan Siswa */
 export const getAllPerizinan = async (req, res) => {
   try {
-    const { tahun_ajaran, semester } = req.query;
+    const { tahun_ajaran, semester, tingkat, kelas, search, date } = req.query;
 
-    let whereClause = "WHERE 1=1";
-    const filterValues = [];
+    // Required Field
+    if (!tahun_ajaran || !semester)
+      return res.status(400).json({ message: "Required fields missing" });
 
-    // Filter tahun ajaran & semester
-    if (tahun_ajaran) {
-      whereClause += " AND ta.tahun_ajaran = ?";
-      filterValues.push(tahun_ajaran);
+    // Query Builder
+    let whereClause = "WHERE 1=1 AND ta.tahun_ajaran = ? AND ta.semester = ?";
+    const filterValues = [tahun_ajaran, semester];
 
-      if (semester) {
-        whereClause += " AND ta.semester = ?";
-        filterValues.push(semester);
-      }
+    // Filter tingkat
+    if (tingkat) {
+      whereClause += " AND (sta.kelas LIKE ?)";
+      filterValues.push(`%${tingkat}%`);
+    }
+
+    // Filter kelas
+    if (kelas) {
+      whereClause += " AND sta.kelas = ?";
+      filterValues.push(kelas);
+    }
+
+    // Search by Nama / NISN
+    if (search) {
+      whereClause += " AND (s.nama LIKE ? OR s.nisn LIKE ?)";
+      filterValues.push(`%${search}%`, `%${search}%`);
+    }
+
+    // Filter date
+    if (date) {
+      whereClause += `
+        AND p.tanggal >= ?
+        AND p.tanggal < DATE_ADD(?, INTERVAL 1 DAY)
+      `;
+      filterValues.push(date, date);
     }
 
     const [rows] = await db.query(
@@ -31,12 +52,13 @@ export const getAllPerizinan = async (req, res) => {
         p.created_at,
         s.id AS id_siswa,
         s.nama AS nama_siswa,
-        s.kelas,
+        sta.kelas,
         p.gambar,
         ta.tahun_ajaran,
         ta.semester
       FROM perizinan_siswa p
       JOIN siswa s ON s.id = p.id_siswa
+      JOIN siswa_tahun_ajaran sta ON sta.id_siswa = s.id
       JOIN tahun_ajaran ta ON p.id_tahun_ajaran = ta.id
       ${whereClause}
       ORDER BY p.tanggal DESC
@@ -45,33 +67,6 @@ export const getAllPerizinan = async (req, res) => {
     );
 
     res.json(rows);
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ message: "Server error" });
-  }
-};
-
-/* Get Perizinan Siswa by ID */
-export const getPerizinanById = async (req, res) => {
-  try {
-    const [rows] = await db.query(
-      `
-      SELECT 
-        p.*,
-        s.nama AS nama_siswa,
-        s.kelas
-      FROM perizinan_siswa p
-      JOIN siswa s ON s.id = p.id_siswa
-      WHERE p.id = ?
-      `,
-      [req.params.id],
-    );
-
-    if (!rows.length) {
-      return res.status(404).json({ message: "Perizinan siswa not found" });
-    }
-
-    res.json(rows[0]);
   } catch (err) {
     console.error(err);
     res.status(500).json({ message: "Server error" });

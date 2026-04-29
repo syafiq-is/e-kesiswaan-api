@@ -14,24 +14,6 @@ export const getAllTahunAjaran = async (req, res) => {
   }
 };
 
-/* Get Tahun Ajaran by ID */
-export const getTahunAjaranById = async (req, res) => {
-  try {
-    const [rows] = await db.query("SELECT * FROM tahun_ajaran WHERE id = ?", [
-      req.params.id,
-    ]);
-
-    if (!rows.length) {
-      return res.status(404).json({ message: "Tahun Ajaran not found" });
-    }
-
-    res.json(rows[0]);
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ message: "Server error" });
-  }
-};
-
 /* Create Tahun Ajaran */
 export const createTahunAjaran = async (req, res) => {
   try {

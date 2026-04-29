@@ -8,44 +8,56 @@ export const getAllPelanggaran = async (req, res) => {
       limit = 10,
       tahun_ajaran,
       semester,
+      tingkat,
       kelas,
       search,
+      date,
     } = req.query;
+
+    // Required Field
+    if (!tahun_ajaran || !semester)
+      return res.status(400).json({ message: "Required fields missing" });
 
     const pageNumber = parseInt(page);
     const limitNumber = parseInt(limit);
     const offset = (pageNumber - 1) * limitNumber;
 
-    let whereClause = "WHERE 1=1";
-    const filterValues = [];
+    // Query Builder
+    let whereClause = "WHERE 1=1 AND ta.tahun_ajaran = ? AND ta.semester = ?";
+    const filterValues = [tahun_ajaran, semester];
 
-    // Search by nama / NISN
+    // Filter tingkat
+    if (tingkat) {
+      whereClause += " AND (sta.kelas LIKE ?)";
+      filterValues.push(`%${tingkat}%`);
+    }
+
+    // Filter kelas
+    if (kelas) {
+      whereClause += " AND sta.kelas = ?";
+      filterValues.push(kelas);
+    }
+
+    // Search by Nama / NISN
     if (search) {
       whereClause += " AND (s.nama LIKE ? OR s.nisn LIKE ?)";
       filterValues.push(`%${search}%`, `%${search}%`);
     }
 
-    // Filter tahun ajaran & semester
-    if (tahun_ajaran) {
-      whereClause += " AND ta.tahun_ajaran = ?";
-      filterValues.push(tahun_ajaran);
-
-      if (semester) {
-        whereClause += " AND ta.semester = ?";
-        filterValues.push(semester);
-      }
-    }
-
-    // Filter kelas
-    if (kelas) {
-      whereClause += " AND s.kelas = ?";
-      filterValues.push(kelas);
+    // Filter date
+    if (date) {
+      whereClause += `
+        AND ps.tanggal >= ?
+        AND ps.tanggal < DATE_ADD(?, INTERVAL 1 DAY)
+      `;
+      filterValues.push(date, date);
     }
 
     const countQuery = `
       SELECT COUNT(*) AS total
       FROM pelanggaran_siswa ps
       JOIN siswa s ON ps.id_siswa = s.id
+      JOIN siswa_tahun_ajaran sta ON sta.id_siswa = s.id
       JOIN jenis_pelanggaran jp ON ps.id_jenis_pelanggaran = jp.id
       JOIN tahun_ajaran ta ON ps.id_tahun_ajaran = ta.id
       ${whereClause}
@@ -62,13 +74,14 @@ export const getAllPelanggaran = async (req, res) => {
         s.nama_wali,
         s.jenis_kelamin,
         s.nisn,
-        s.kelas,
+        sta.kelas,
         jp.pelanggaran,
         jp.poin,
         ta.tahun_ajaran,
         ta.semester
       FROM pelanggaran_siswa ps
       JOIN siswa s ON ps.id_siswa = s.id
+      JOIN siswa_tahun_ajaran sta ON sta.id_siswa = s.id
       JOIN jenis_pelanggaran jp ON ps.id_jenis_pelanggaran = jp.id
       JOIN tahun_ajaran ta ON ps.id_tahun_ajaran = ta.id
       ${whereClause}
@@ -101,26 +114,41 @@ export const getAllPelanggaran = async (req, res) => {
 /* Get All Siswa with Total Poin + Riwayat */
 export const getAllTotalPoinSiswa = async (req, res) => {
   try {
-    const { page = 1, limit = 10, search, tahun_ajaran, semester } = req.query;
+    const {
+      page = 1,
+      limit = 10,
+      tahun_ajaran,
+      semester,
+      tingkat,
+      kelas,
+      search,
+    } = req.query;
+
+    // Required Field
+    if (!tahun_ajaran || !semester)
+      return res.status(400).json({ message: "Required fields missing" });
 
     const pageNumber = parseInt(page);
     const limitNumber = parseInt(limit);
     const offset = (pageNumber - 1) * limitNumber;
 
-    let whereClause = "WHERE 1=1";
-    const filterValues = [];
+    // Query Builder
+    let whereClause = "WHERE 1=1 AND ta.tahun_ajaran = ? AND ta.semester = ?";
+    const filterValues = [tahun_ajaran, semester];
 
-    // Filter tahun ajaran & semester
-    if (tahun_ajaran) {
-      whereClause += " AND ta.tahun_ajaran = ?";
-      filterValues.push(tahun_ajaran);
-
-      if (semester) {
-        whereClause += " AND ta.semester = ?";
-        filterValues.push(semester);
-      }
+    // Filter tingkat
+    if (tingkat) {
+      whereClause += " AND (sta.kelas LIKE ?)";
+      filterValues.push(`%${tingkat}%`);
     }
 
+    // Filter kelas
+    if (kelas) {
+      whereClause += " AND sta.kelas = ?";
+      filterValues.push(kelas);
+    }
+
+    // Search by Nama / NISN
     if (search) {
       whereClause += " AND (s.nama LIKE ? OR s.nisn LIKE ?)";
       filterValues.push(`%${search}%`, `%${search}%`);
@@ -130,6 +158,7 @@ export const getAllTotalPoinSiswa = async (req, res) => {
       SELECT COUNT(DISTINCT s.id) AS total
       FROM pelanggaran_siswa ps
       JOIN siswa s ON ps.id_siswa = s.id
+      JOIN siswa_tahun_ajaran sta ON sta.id_siswa = s.id
       JOIN tahun_ajaran ta ON ps.id_tahun_ajaran = ta.id
       ${whereClause}
     `;
@@ -139,7 +168,7 @@ export const getAllTotalPoinSiswa = async (req, res) => {
         s.id,
         s.nama AS nama_siswa,
         s.nisn,
-        s.kelas,
+        sta.kelas,
 
         SUM(jp.poin) AS total_poin,
 
@@ -154,10 +183,11 @@ export const getAllTotalPoinSiswa = async (req, res) => {
 
       FROM pelanggaran_siswa ps
       JOIN siswa s ON ps.id_siswa = s.id
+      JOIN siswa_tahun_ajaran sta ON sta.id_siswa = s.id
       JOIN jenis_pelanggaran jp ON ps.id_jenis_pelanggaran = jp.id
       JOIN tahun_ajaran ta ON ps.id_tahun_ajaran = ta.id
       ${whereClause}
-      GROUP BY s.id
+      GROUP BY s.id, s.nama, s.nisn, sta.kelas
       ORDER BY total_poin DESC
       LIMIT ? OFFSET ?
     `;
@@ -179,36 +209,6 @@ export const getAllTotalPoinSiswa = async (req, res) => {
         totalPages: Math.ceil(total / limitNumber),
       },
     });
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ message: "Server error" });
-  }
-};
-
-/* Get Pelanggaran Siswa by ID */
-export const getPelanggaranById = async (req, res) => {
-  try {
-    const [rows] = await db.query(
-      `
-      SELECT 
-        ps.*,
-        s.nama AS nama_siswa,
-        s.kelas,
-        jp.pelanggaran,
-        jp.poin
-      FROM pelanggaran_siswa ps
-      JOIN siswa s ON s.id = ps.id_siswa
-      JOIN jenis_pelanggaran jp ON jp.id = ps.id_jenis_pelanggaran
-      WHERE ps.id = ?
-      `,
-      [req.params.id],
-    );
-
-    if (!rows.length) {
-      return res.status(404).json({ message: "Pelanggaran siswa not found" });
-    }
-
-    res.json(rows[0]);
   } catch (err) {
     console.error(err);
     res.status(500).json({ message: "Server error" });

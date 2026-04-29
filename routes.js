@@ -44,13 +44,6 @@ router.get(
   TahunAjaranController.getAllTahunAjaran,
 );
 
-router.get(
-  "/tahun_ajaran/:id",
-  authMiddleware,
-  requireRole(["admin", "guru_bk", "kepala_sekolah"]),
-  TahunAjaranController.getTahunAjaranById,
-);
-
 router.post(
   "/tahun_ajaran",
   authMiddleware,
@@ -132,13 +125,6 @@ router.get(
   SiswaController.getAllKelas,
 );
 
-router.get(
-  "/siswa/:id",
-  authMiddleware,
-  requireRole(["admin", "guru_bk", "kepala_sekolah"]),
-  SiswaController.getSiswaById,
-);
-
 router.post(
   "/siswa",
   authMiddleware,
@@ -208,13 +194,6 @@ router.get(
   PrestasiController.getAllPrestasi,
 );
 
-router.get(
-  "/prestasi/:id",
-  authMiddleware,
-  requireRole(["admin", "guru_bk", "kepala_sekolah"]),
-  PrestasiController.getPrestasiById,
-);
-
 router.post(
   "/prestasi",
   authMiddleware,
@@ -245,13 +224,6 @@ router.get(
   authMiddleware,
   requireRole(["admin", "guru_bk", "kepala_sekolah"]),
   JenisPelanggaranController.getAllJenisPelanggaran,
-);
-
-router.get(
-  "/jenis_pelanggaran/:id",
-  authMiddleware,
-  requireRole(["admin", "guru_bk", "kepala_sekolah"]),
-  JenisPelanggaranController.getJenisPelanggaranById,
 );
 
 router.post(
@@ -291,13 +263,6 @@ router.get(
   PelanggaranController.getAllTotalPoinSiswa,
 );
 
-router.get(
-  "/pelanggaran/:id",
-  authMiddleware,
-  requireRole(["admin", "guru_bk", "kepala_sekolah"]),
-  PelanggaranController.getPelanggaranById,
-);
-
 router.post(
   "/pelanggaran",
   authMiddleware,
@@ -326,13 +291,6 @@ router.get(
   authMiddleware,
   requireRole(["admin", "guru_bk", "kepala_sekolah"]),
   PerizinanController.getAllPerizinan,
-);
-
-router.get(
-  "/perizinan/:id",
-  authMiddleware,
-  requireRole(["admin", "guru_bk", "kepala_sekolah"]),
-  PerizinanController.getPerizinanById,
 );
 
 router.post(
@@ -365,13 +323,6 @@ router.get(
   authMiddleware,
   requireRole(["admin", "guru_bk", "kepala_sekolah"]),
   HomeVisitController.getAllHomeVisit,
-);
-
-router.get(
-  "/home_visit/:id",
-  authMiddleware,
-  requireRole(["admin", "guru_bk", "kepala_sekolah"]),
-  HomeVisitController.getHomeVisitById,
 );
 
 router.post(
@@ -425,13 +376,6 @@ router.get(
   authMiddleware,
   requireRole(["admin", "guru_bk"]),
   ConfigController.getAllConfig,
-);
-
-router.get(
-  "/config/:id",
-  authMiddleware,
-  requireRole(["admin", "guru_bk"]),
-  ConfigController.getConfigById,
 );
 
 router.patch(
