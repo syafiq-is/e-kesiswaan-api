@@ -128,28 +128,80 @@ export const createAbsensi = async (req, res) => {
   try {
     const { nisn, tipe_absensi } = req.body;
 
-    if (!nisn || !tipe_absensi)
-      return res.status(400).json({ message: "Required fields missing" });
+    if (!nisn || !tipe_absensi) {
+      return res.status(400).json({
+        message: "Required fields missing",
+      });
+    }
+
+    if (!["datang", "pulang"].includes(tipe_absensi)) {
+      return res.status(400).json({
+        message: "Invalid tipe_absensi",
+      });
+    }
 
     const [tahun_ajaran_aktif] = await db.query(
-      "SELECT id FROM tahun_ajaran WHERE status = 'aktif' LIMIT 1",
+      `
+      SELECT id
+      FROM tahun_ajaran
+      WHERE status = 'aktif'
+      LIMIT 1
+      `,
     );
 
-    // ensure siswa exists
-    const [siswa] = await db.query("SELECT id FROM siswa WHERE nisn = ?", [
-      nisn,
-    ]);
+    if (tahun_ajaran_aktif.length === 0) {
+      return res.status(400).json({
+        message: "No active academic year found",
+      });
+    }
+
+    // ENSURE SISWA EXISTS
+    const [siswa] = await db.query(
+      `
+      SELECT id
+      FROM siswa
+      WHERE nisn = ?
+      `,
+      [nisn],
+    );
 
     if (!siswa.length) {
-      return res.status(404).json({ message: "Siswa not found" });
+      return res.status(404).json({
+        message: "Siswa not found",
+      });
+    }
+
+    const id_siswa = siswa[0].id;
+
+    // CHECK ALREADY ABSEN TODAY
+    const [existingAbsensi] = await db.query(
+      `
+      SELECT id
+      FROM absensi
+      WHERE id_siswa = ?
+      AND tipe_absensi = ?
+      AND DATE(created_at) = CURDATE()
+      LIMIT 1
+      `,
+      [id_siswa, tipe_absensi],
+    );
+
+    if (existingAbsensi.length > 0) {
+      return res.status(400).json({
+        message: `Siswa already absensi ${tipe_absensi} today`,
+      });
     }
 
     // GET CONFIG
     const [rows] = await db.query(
-      "SELECT config_key, config_value FROM config",
+      `
+      SELECT config_key, config_value
+      FROM config
+      `,
     );
 
     const config = {};
+
     rows.forEach((row) => {
       config[row.config_key] = row.config_value;
     });
@@ -162,44 +214,88 @@ export const createAbsensi = async (req, res) => {
     const jamBolehPulang = config.jam_boleh_pulang;
     const batasAkhirPulang = config.batas_akhir_pulang;
 
-    // ABSEN MASUK
+    // ABSEN DATANG
     if (tipe_absensi === "datang") {
       if (currentTime < jamMasuk) {
-        return res.status(400).json({ message: "Belum waktunya absen masuk" });
+        return res.status(400).json({
+          message: "Belum waktunya absen masuk",
+        });
       }
 
-      const status = currentTime > jamTerlambat ? "terlambat" : "tepat_waktu";
+      const status = currentTime > jamTerlambat ? "terlambat" : "tepat waktu";
 
       await db.query(
-        `INSERT INTO absensi (id_siswa, id_tahun_ajaran, tipe_absensi, status) VALUES (?, ?, ?, ?)`,
-        [siswa[0].id, tahun_ajaran_aktif[0].id, tipe_absensi, status],
+        `
+        INSERT INTO absensi (
+          id_siswa,
+          id_tahun_ajaran,
+          tipe_absensi,
+          status
+        ) VALUES (?, ?, ?, ?)
+        `,
+        [id_siswa, tahun_ajaran_aktif[0].id, tipe_absensi, status],
       );
 
-      res.status(201).json({ message: "Absensi created successfully" });
+      return res.status(201).json({
+        message: "Absensi datang created successfully",
+      });
     }
 
     // ABSEN PULANG
     if (tipe_absensi === "pulang") {
       if (currentTime < jamBolehPulang) {
-        return res.status(400).json({ message: "Belum waktunya absen pulang" });
+        return res.status(400).json({
+          message: "Belum waktunya absen pulang",
+        });
       }
 
       if (currentTime > batasAkhirPulang) {
-        return res
-          .status(400)
-          .json({ message: "Sudah lewat batas absen pulang" });
+        return res.status(400).json({
+          message: "Sudah lewat batas absen pulang",
+        });
+      }
+
+      // ENSURE SUDAH ABSEN DATANG
+      const [absenDatang] = await db.query(
+        `
+        SELECT id
+        FROM absensi
+        WHERE id_siswa = ?
+        AND tipe_absensi = 'datang'
+        AND DATE(created_at) = CURDATE()
+        LIMIT 1
+        `,
+        [id_siswa],
+      );
+
+      if (absenDatang.length === 0) {
+        return res.status(400).json({
+          message: "Siswa belum absensi datang hari ini",
+        });
       }
 
       await db.query(
-        `INSERT INTO absensi (id_siswa, id_tahun_ajaran, tipe_absensi, status) VALUES (?, ?, ?, ?)`,
-        [siswa[0].id, tahun_ajaran_aktif[0].id, tipe_absensi, status],
+        `
+        INSERT INTO absensi (
+          id_siswa,
+          id_tahun_ajaran,
+          tipe_absensi,
+          status
+        ) VALUES (?, ?, ?, ?)
+        `,
+        [id_siswa, tahun_ajaran_aktif[0].id, tipe_absensi, "tepat waktu"],
       );
 
-      res.status(201).json({ message: "Absensi created successfully" });
+      return res.status(201).json({
+        message: "Absensi pulang created successfully",
+      });
     }
   } catch (err) {
     console.error(err);
-    res.status(500).json({ message: "Server error" });
+
+    return res.status(500).json({
+      message: "Server error",
+    });
   }
 };
 
@@ -261,5 +357,132 @@ export const deleteAbsensiByNISN = async (req, res) => {
   } catch (err) {
     console.error(err);
     res.status(500).json({ message: "Server error" });
+  }
+};
+
+/* Flag Unattended Students As Alpha */
+export const flagUnattendedAsAlpha = async (req, res) => {
+  try {
+    const today = new Date().toISOString().split("T")[0];
+
+    /* GET ACTIVE TAHUN AJARAN */
+    const [tahunAjaran] = await db.query(`
+      SELECT id
+      FROM tahun_ajaran
+      WHERE status = 'aktif'
+      LIMIT 1
+    `);
+
+    if (tahunAjaran.length === 0) {
+      return res.status(400).json({
+        message: "No active academic year found",
+      });
+    }
+
+    const id_tahun_ajaran = tahunAjaran[0].id;
+
+    /* GET CONFIG */
+    const [configRows] = await db.query(`
+      SELECT config_key, config_value
+      FROM config
+    `);
+
+    const config = {};
+
+    configRows.forEach((row) => {
+      config[row.config_key] = row.config_value;
+    });
+
+    const batasAkhirPulang = config.batas_akhir_pulang;
+
+    const currentTime = new Date().toTimeString().slice(0, 8);
+
+    /* ONLY RUN AFTER BATAS AKHIR PULANG */
+    if (currentTime < batasAkhirPulang) {
+      return res.status(400).json({
+        message: "Belum melewati batas akhir absensi pulang",
+      });
+    }
+
+    /*
+      CONDITIONS:
+
+      1. Tidak absensi datang sampai batas akhir pulang
+      2. Datang tapi tidak pulang
+      3. Tidak punya izin/sakit hari ini
+    */
+
+    const [students] = await db.query(
+      `
+      SELECT
+        s.id AS id_siswa
+      FROM siswa s
+
+      /* CHECK IZIN TODAY */
+      LEFT JOIN perizinan_siswa ps
+        ON ps.id_siswa = s.id
+        AND ps.tanggal = CURDATE()
+
+      /* CHECK DATANG */
+      LEFT JOIN absensi datang
+        ON datang.id_siswa = s.id
+        AND datang.tipe_absensi = 'datang'
+        AND DATE(datang.created_at) = CURDATE()
+
+      /* CHECK PULANG */
+      LEFT JOIN absensi pulang
+        ON pulang.id_siswa = s.id
+        AND pulang.tipe_absensi = 'pulang'
+        AND DATE(pulang.created_at) = CURDATE()
+
+      WHERE
+        ps.id IS NULL
+        AND (
+          datang.id IS NULL
+          OR (
+            datang.id IS NOT NULL
+            AND pulang.id IS NULL
+          )
+        )
+      `,
+    );
+
+    if (students.length === 0) {
+      return res.json({
+        message: "No students need to be flagged as alpha",
+      });
+    }
+
+    const alphaValues = students.map((student) => [
+      student.id_siswa,
+      id_tahun_ajaran,
+      1,
+      new Date(),
+      "Alpha ditandai oleh sistem",
+    ]);
+
+    await db.query(
+      `
+      INSERT INTO pelanggaran_siswa (
+        id_siswa, 
+        id_tahun_ajaran, 
+        id_jenis_pelanggaran, 
+        tanggal, 
+        keterangan
+      ) VALUES ?
+      `,
+      [alphaValues],
+    );
+
+    return res.json({
+      message: "Students flagged as alpha successfully",
+      total_alpha: students.length,
+    });
+  } catch (err) {
+    console.error(err);
+
+    return res.status(500).json({
+      message: "Server error",
+    });
   }
 };

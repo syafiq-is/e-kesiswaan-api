@@ -185,6 +185,12 @@ router.get(
   RekapKehadiranController.getRekapKehadiran,
 );
 
+router.post(
+  "/absensi/tandaiAlpha",
+  authMiddleware,
+  requireRole(["absensi"]),
+  AbsensiController.flagUnattendedAsAlpha,
+);
 /* ===== Prestasi Siswa Routes ===== */
 
 router.get(

@@ -11,7 +11,7 @@ export const getAllStatistics = async (req, res) => {
 
     // [1] Total Siswa
     const [totalSiswa] = await db.query(
-      `SELECT COUNT(*) AS total_siswa
+      `SELECT COUNT(DISTINCT id_siswa) AS total_siswa
        FROM siswa s
        JOIN siswa_tahun_ajaran sta ON sta.id_siswa = s.id
        WHERE sta.id_tahun_ajaran = ?`,
@@ -22,23 +22,16 @@ export const getAllStatistics = async (req, res) => {
     const [hadirHariIni] = await db.query(
       `SELECT COUNT(DISTINCT id_siswa) AS hadir_hari_ini
        FROM absensi
-       WHERE DATE(created_at) = CURDATE()
-       AND id_tahun_ajaran = ?`,
+       WHERE DATE(created_at) = CURDATE()`,
       [id_tahun_ajaran],
     );
 
-    // [3] Terlambat Hari Ini (dynamic from config)
+    // [3] Terlambat Hari Ini
     const [terlambatHariIni] = await db.query(
-      `SELECT COUNT(*) AS terlambat_hari_ini
+      `SELECT COUNT(DISTINCT id_siswa) AS terlambat_hari_ini
        FROM absensi
        WHERE DATE(created_at) = CURDATE()
-       AND id_tahun_ajaran = ?
-       AND TIME(created_at) > (
-         SELECT config_value
-         FROM config
-         WHERE config_key = 'maks_waktu_terlambat'
-         LIMIT 1
-       )`,
+       AND status = "terlambat"`,
       [id_tahun_ajaran],
     );
 
@@ -49,16 +42,13 @@ export const getAllStatistics = async (req, res) => {
           '00:00:00'
         ) AS rata_rata_kedatangan
        FROM absensi
-       WHERE DATE(created_at) = CURDATE()
-       AND id_tahun_ajaran = ?`,
+       WHERE DATE(created_at) = CURDATE()`,
       [id_tahun_ajaran],
     );
 
     // [5] Attendance ratio (0–1)
     const total = totalSiswa[0].total_siswa;
     const hadir = hadirHariIni[0].hadir_hari_ini;
-
-    const absent = total - hadir;
 
     const proporsiKetepatanWaktu =
       total > 0 ? Number((hadir / total).toFixed(2)) : 0;
@@ -74,13 +64,8 @@ export const getAllStatistics = async (req, res) => {
        JOIN siswa s ON s.id = a.id_siswa
        JOIN siswa_tahun_ajaran sta ON sta.id_siswa = s.id
        WHERE DATE(a.created_at) = CURDATE()
-       AND a.id_tahun_ajaran = ?
-       AND TIME(a.created_at) > (
-         SELECT config_value
-         FROM config
-         WHERE config_key = 'maks_waktu_terlambat'
-         LIMIT 1
-       )
+       AND status = "terlambat"
+       AND sta.id_tahun_ajaran = ?
        ORDER BY a.created_at DESC
        LIMIT 5`,
       [id_tahun_ajaran],
@@ -103,11 +88,11 @@ export const getAllStatistics = async (req, res) => {
 /* Statistics Summary */
 export const getTrenPelanggaran = async (req, res) => {
   try {
-    const { id_tahun_ajaran } = req.query;
+    // const { id_tahun_ajaran } = req.query;
 
-    if (!id_tahun_ajaran) {
-      return res.status(400).json({ message: "id_tahun_ajaran is required" });
-    }
+    // if (!id_tahun_ajaran) {
+    //   return res.status(400).json({ message: "id_tahun_ajaran is required" });
+    // }
 
     // Tren Pelanggaran (Jan–Dec Tahun Ini)
     const [trenPelanggaran] = await db.query(`
@@ -146,11 +131,13 @@ export const getRekapKehadiran = async (req, res) => {
 
     let dateConditionAbsensi = "";
     let dateConditionPerizinan = "";
+    let dateConditionPelanggaran = "";
 
     switch (type) {
       case "weekly":
         dateConditionAbsensi = `YEARWEEK(a.created_at,1)=YEARWEEK(CURDATE(),1)`;
         dateConditionPerizinan = `YEARWEEK(p.tanggal,1)=YEARWEEK(CURDATE(),1)`;
+        dateConditionPelanggaran = `YEARWEEK(ps.tanggal,1)=YEARWEEK(CURDATE(),1)`;
         break;
 
       case "monthly":
@@ -162,21 +149,30 @@ export const getRekapKehadiran = async (req, res) => {
           YEAR(p.tanggal)=YEAR(CURDATE())
           AND MONTH(p.tanggal)=MONTH(CURDATE())
         `;
+        dateConditionPelanggaran = `
+          YEAR(ps.tanggal)=YEAR(CURDATE())
+          AND MONTH(ps.tanggal)=MONTH(CURDATE())
+        `;
         break;
 
       default:
         dateConditionAbsensi = `DATE(a.created_at)=CURDATE()`;
         dateConditionPerizinan = `DATE(p.tanggal)=CURDATE()`;
+        dateConditionPelanggaran = `DATE(ps.tanggal)=CURDATE()`;
     }
 
     const query = `
       SELECT
         t.tingkat,
 
-        SUM(COALESCE(a.hadir,0)) AS hadir,
-        SUM(COALESCE(p.izin,0)) AS izin,
-        SUM(COALESCE(p.sakit,0)) AS sakit,
-        SUM(COALESCE(p.alpha,0)) AS alpha
+        COUNT(DISTINCT s.id) AS total_siswa,
+
+        SUM(COALESCE(a.hadir, 0)) AS hadir,
+        
+        SUM(COALESCE(p.izin, 0)) AS izin,
+        SUM(COALESCE(p.sakit, 0)) AS sakit,
+        
+        SUM(COALESCE(ps.alpha, 0)) AS alpha
 
       FROM (
         SELECT 7 AS tingkat
@@ -184,15 +180,23 @@ export const getRekapKehadiran = async (req, res) => {
         UNION ALL SELECT 9
       ) t
 
-      LEFT JOIN siswa s 
-      JOIN siswa_tahun_ajaran sta ON sta.id_siswa = s.id
-        ON LEFT(sta.kelas,1) = t.tingkat
+      LEFT JOIN siswa s
+        ON 1=1
+
+      LEFT JOIN siswa_tahun_ajaran sta
+        ON sta.id_siswa = s.id
+        AND LEFT(sta.kelas, 1) = t.tingkat
         AND sta.id_tahun_ajaran = ?
 
       LEFT JOIN (
         SELECT
           id_siswa,
-          COUNT(*) AS hadir
+
+          COUNT(DISTINCT CASE
+            WHEN status != 'alpha'
+            THEN id_siswa
+          END) AS hadir
+
         FROM absensi a
         WHERE ${dateConditionAbsensi}
         GROUP BY id_siswa
@@ -201,13 +205,37 @@ export const getRekapKehadiran = async (req, res) => {
       LEFT JOIN (
         SELECT
           id_siswa,
-          SUM(status='izin') AS izin,
-          SUM(status='sakit') AS sakit,
-          SUM(status='alpha') AS alpha
+
+          COUNT(DISTINCT CASE
+            WHEN status = 'izin'
+            THEN id_siswa
+          END) AS izin,
+
+          COUNT(DISTINCT CASE
+            WHEN status = 'sakit'
+            THEN id_siswa
+          END) AS sakit
+
         FROM perizinan_siswa p
         WHERE ${dateConditionPerizinan}
         GROUP BY id_siswa
       ) p ON p.id_siswa = s.id
+
+      LEFT JOIN (
+        SELECT
+          id_siswa,
+
+          COUNT(DISTINCT CASE
+            WHEN id_jenis_pelanggaran = 1
+            THEN id_siswa
+          END) AS alpha
+
+        FROM pelanggaran_siswa ps
+        WHERE ${dateConditionPelanggaran}
+        GROUP BY id_siswa
+      ) ps ON ps.id_siswa = s.id
+
+      WHERE sta.id IS NOT NULL
 
       GROUP BY t.tingkat
       ORDER BY t.tingkat

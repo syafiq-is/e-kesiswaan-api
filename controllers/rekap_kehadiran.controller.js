@@ -43,20 +43,66 @@ export const getRekapKehadiran = async (req, res) => {
       filterValues.push(`%${search}%`, `%${search}%`);
     }
 
-    // Filter date
+    // FILTER TANGGAL ABSENSI
+    let absensiWhere = `
+      WHERE ta2.tahun_ajaran = ?
+      AND ta2.semester = ?
+    `;
+
+    const absensiValues = [tahun_ajaran, semester];
+
     if (date) {
-      whereClause += `
+      absensiWhere += `
         AND a.created_at >= ?
         AND a.created_at < DATE_ADD(?, INTERVAL 1 DAY)
       `;
-      filterValues.push(date, date);
+      absensiValues.push(date, date);
     }
 
+    // FILTER TANGGAL PERIZINAN
+    let perizinanWhere = `
+      WHERE ta3.tahun_ajaran = ?
+      AND ta3.semester = ?
+    `;
+
+    const perizinanValues = [tahun_ajaran, semester];
+
+    if (date) {
+      perizinanWhere += `
+        AND p.created_at >= ?
+        AND p.created_at < DATE_ADD(?, INTERVAL 1 DAY)
+      `;
+      perizinanValues.push(date, date);
+    }
+
+    // FILTER TANGGAL PELANGGARAN
+    let pelanggaranWhere = `
+      WHERE ta4.tahun_ajaran = ?
+      AND ta4.semester = ?
+    `;
+
+    const pelanggaranValues = [tahun_ajaran, semester];
+
+    if (date) {
+      pelanggaranWhere += `
+        AND ps.created_at >= ?
+        AND ps.created_at < DATE_ADD(?, INTERVAL 1 DAY)
+      `;
+      pelanggaranValues.push(date, date);
+    }
+
+    // Count query
     const countQuery = `
       SELECT COUNT(DISTINCT s.id) AS total
+
       FROM siswa s
-      JOIN siswa_tahun_ajaran sta ON sta.id_siswa = s.id
-      JOIN tahun_ajaran ta ON sta.id_tahun_ajaran = ta.id
+
+      JOIN siswa_tahun_ajaran sta
+        ON sta.id_siswa = s.id
+
+      JOIN tahun_ajaran ta
+        ON sta.id_tahun_ajaran = ta.id
+
       ${whereClause}
     `;
 
@@ -68,39 +114,73 @@ export const getRekapKehadiran = async (req, res) => {
         s.jenis_kelamin,
         sta.kelas,
 
-        COALESCE(a.total_hadir,0) AS total_hadir,
-        COALESCE(a.total_terlambat,0) AS total_terlambat,
+        COALESCE(a.total_hadir, 0) AS total_hadir,
+        COALESCE(a.total_terlambat, 0) AS total_terlambat,
 
-        COALESCE(p.total_izin,0) AS total_izin,
-        COALESCE(p.total_sakit,0) AS total_sakit,
-        COALESCE(p.total_alpha,0) AS total_alpha
+        COALESCE(p.total_izin, 0) AS total_izin,
+        COALESCE(p.total_sakit, 0) AS total_sakit,
 
-      FROM siswa s 
-      JOIN siswa_tahun_ajaran sta ON sta.id_siswa = s.id
-      JOIN tahun_ajaran ta ON sta.id_tahun_ajaran = ta.id
+        COALESCE(ps.total_alpha, 0) AS total_alpha
+
+      FROM siswa s
+
+      JOIN siswa_tahun_ajaran sta
+        ON sta.id_siswa = s.id
+
+      JOIN tahun_ajaran ta
+        ON sta.id_tahun_ajaran = ta.id
 
       LEFT JOIN (
         SELECT
           a.id_siswa,
+
           COUNT(*) AS total_hadir,
-          SUM(TIME(a.created_at) > '07:00:00') AS total_terlambat
+
+          SUM(a.status = 'terlambat') AS total_terlambat
+
         FROM absensi a
-        JOIN tahun_ajaran ta2 ON a.id_tahun_ajaran = ta2.id
-        WHERE 1=1
-        ${tahun_ajaran ? "AND ta2.tahun_ajaran = ?" : ""}
-        ${semester ? "AND ta2.semester = ?" : ""}
+
+        JOIN tahun_ajaran ta2
+          ON a.id_tahun_ajaran = ta2.id
+
+        ${absensiWhere}
+
         GROUP BY a.id_siswa
       ) a ON a.id_siswa = s.id
 
       LEFT JOIN (
         SELECT
-          id_siswa,
-          SUM(status='izin') AS total_izin,
-          SUM(status='sakit') AS total_sakit,
-          SUM(status='alpha') AS total_alpha
-        FROM perizinan_siswa
-        GROUP BY id_siswa
+          p.id_siswa,
+
+          SUM(p.status = 'izin') AS total_izin,
+
+          SUM(p.status = 'sakit') AS total_sakit
+
+        FROM perizinan_siswa p
+
+        JOIN tahun_ajaran ta3
+          ON p.id_tahun_ajaran = ta3.id
+
+        ${perizinanWhere}
+
+        GROUP BY p.id_siswa
       ) p ON p.id_siswa = s.id
+
+      LEFT JOIN (
+        SELECT
+          ps.id_siswa,
+
+          SUM(ps.id_jenis_pelanggaran = 1) AS total_alpha
+
+        FROM pelanggaran_siswa ps
+
+        JOIN tahun_ajaran ta4
+          ON ps.id_tahun_ajaran = ta4.id
+
+        ${pelanggaranWhere}
+
+        GROUP BY ps.id_siswa
+      ) ps ON ps.id_siswa = s.id
 
       ${whereClause}
 
@@ -110,12 +190,10 @@ export const getRekapKehadiran = async (req, res) => {
 
     const [[{ total }]] = await db.query(countQuery, filterValues);
 
-    const absensiFilters = [];
-    if (tahun_ajaran) absensiFilters.push(tahun_ajaran);
-    if (semester) absensiFilters.push(semester);
-
     const [rows] = await db.query(dataQuery, [
-      ...absensiFilters,
+      ...absensiValues,
+      ...perizinanValues,
+      ...pelanggaranValues,
       ...filterValues,
       limitNumber,
       offset,
