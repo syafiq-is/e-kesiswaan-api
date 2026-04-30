@@ -51,6 +51,13 @@ router.post(
   TahunAjaranController.createTahunAjaran,
 );
 
+router.post(
+  "/tahun_ajaran/promote",
+  authMiddleware,
+  requireRole(["admin"]),
+  TahunAjaranController.createTahunAjaranAndPromoteStuedents,
+);
+
 router.patch(
   "/tahun_ajaran/:id",
   authMiddleware,
@@ -191,6 +198,7 @@ router.post(
   requireRole(["absensi"]),
   AbsensiController.flagUnattendedAsAlpha,
 );
+
 /* ===== Prestasi Siswa Routes ===== */
 
 router.get(

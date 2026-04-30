@@ -120,3 +120,148 @@ export const deleteTahunAjaranById = async (req, res) => {
     res.status(500).json({ message: "Server error" });
   }
 };
+
+export const createTahunAjaranAndPromoteStuedents = async (req, res) => {
+  const connection = await db.getConnection();
+
+  try {
+    const { tahun_ajaran, semester, status = "nonaktif" } = req.body;
+
+    if (!tahun_ajaran || !semester) {
+      return res.status(400).json({
+        message: "Required fields missing",
+      });
+    }
+
+    if (!["Ganjil", "Genap"].includes(semester)) {
+      return res.status(400).json({
+        message: "Invalid semester",
+      });
+    }
+
+    await connection.beginTransaction();
+
+    /* ONLY ONE ACTIVE */
+    if (status === "aktif") {
+      await connection.query(`
+        UPDATE tahun_ajaran
+        SET status = 'nonaktif'
+        WHERE status = 'aktif'
+      `);
+    }
+
+    const [result] = await connection.query(
+      `
+      INSERT INTO tahun_ajaran (
+        tahun_ajaran,
+        semester,
+        status
+      ) VALUES (?, ?, ?)
+      `,
+      [tahun_ajaran, semester, status],
+    );
+
+    const newTahunAjaranId = result.insertId;
+
+    /* AUTO ENROLL / PROMOTION */
+    await promoteSiswaToNewAcademicYear(connection, newTahunAjaranId, semester);
+
+    await connection.commit();
+
+    return res.status(201).json({
+      message: "Tahun ajaran created successfully",
+    });
+  } catch (err) {
+    await connection.rollback();
+
+    console.error(err);
+
+    return res.status(500).json({
+      message: "Server error",
+    });
+  } finally {
+    connection.release();
+  }
+};
+
+const promoteSiswaToNewAcademicYear = async (
+  connection,
+  newTahunAjaranId,
+  semester,
+) => {
+  /* GET LATEST ENROLLMENTS */
+  const [rows] = await connection.query(`
+    SELECT
+      sta.id_siswa,
+      sta.kelas
+
+    FROM siswa_tahun_ajaran sta
+
+    INNER JOIN (
+      SELECT
+        id_siswa,
+        MAX(id_tahun_ajaran) AS latest_tahun
+
+      FROM siswa_tahun_ajaran
+
+      GROUP BY id_siswa
+    ) latest
+      ON latest.id_siswa = sta.id_siswa
+      AND latest.latest_tahun = sta.id_tahun_ajaran
+  `);
+
+  const insertValues = [];
+
+  for (const row of rows) {
+    const { id_siswa, kelas } = row;
+
+    /*
+      EXAMPLES:
+      7A
+      8B
+      9C
+    */
+
+    const match = kelas.match(/^(\d+)(.*)$/);
+
+    if (!match) continue;
+
+    let tingkat = parseInt(match[1]);
+    const suffix = match[2];
+
+    /*
+      ONLY PROMOTE ON GANJIL
+
+      GANJIL:
+      7A -> 8A
+
+      GENAP:
+      7A -> 7A
+    */
+    if (semester === "Ganjil") {
+      /* GRADE 9 = GRADUATED */
+      if (tingkat >= 9) {
+        continue;
+      }
+
+      tingkat += 1;
+    }
+
+    const newKelas = `${tingkat}${suffix}`;
+
+    insertValues.push([id_siswa, newTahunAjaranId, newKelas]);
+  }
+
+  if (insertValues.length > 0) {
+    await connection.query(
+      `
+      INSERT INTO siswa_tahun_ajaran (
+        id_siswa,
+        id_tahun_ajaran,
+        kelas
+      ) VALUES ?
+      `,
+      [insertValues],
+    );
+  }
+};
