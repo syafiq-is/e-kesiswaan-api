@@ -40,7 +40,7 @@ router.post("/logout", AuthController.logout);
 router.get(
   "/tahun_ajaran",
   authMiddleware,
-  requireRole(["admin", "guru_bk", "kepala_sekolah"]),
+  requireRole(["absensi", "admin", "guru_bk", "kepala_sekolah"]),
   TahunAjaranController.getAllTahunAjaran,
 );
 
@@ -388,7 +388,7 @@ router.get(
 router.get(
   "/config",
   authMiddleware,
-  requireRole(["admin", "guru_bk"]),
+  requireRole(["absensi", "admin", "guru_bk"]),
   ConfigController.getAllConfig,
 );
 

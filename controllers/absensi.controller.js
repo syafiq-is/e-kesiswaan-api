@@ -37,66 +37,51 @@ export const getAllAbsensi = async (req, res) => {
 
     const dataQuery = `
       SELECT 
-        a.id,
-        a.created_at,
-        a.tipe_absensi,
+        a.id, 
+        a.created_at, 
+        a.tipe_absensi, 
         a.status,
-
-        s.nama,
+      
+        s.nama, 
         s.nisn,
-
+        
         sta.kelas,
-
-        ta.tahun_ajaran,
-        ta.semester,
-
         COALESCE(p.total_poin, 0) AS total_poin,
         COALESCE(aaa.total_terlambat, 0) AS total_terlambat
 
       FROM absensi a
       JOIN siswa s ON a.id_siswa = s.id
       JOIN tahun_ajaran ta ON a.id_tahun_ajaran = ta.id
-      JOIN siswa_tahun_ajaran sta ON sta.id_siswa = s.id
+      JOIN siswa_tahun_ajaran sta ON sta.id_siswa = s.id AND sta.id_tahun_ajaran = a.id_tahun_ajaran
 
       /* TOTAL POIN */
       LEFT JOIN (
         SELECT 
-          ps.id_siswa,
-          ps.id_tahun_ajaran,
+          ps.id_siswa, 
+          ps.id_tahun_ajaran, 
           SUM(jp.poin) AS total_poin
-
-        FROM pelanggaran_siswa ps
-
-        JOIN jenis_pelanggaran jp
+          FROM pelanggaran_siswa ps
+        JOIN jenis_pelanggaran jp 
           ON ps.id_jenis_pelanggaran = jp.id
-
-        GROUP BY ps.id_siswa, ps.id_tahun_ajaran
-      ) p 
-        ON p.id_siswa = s.id
-        AND p.id_tahun_ajaran = a.id_tahun_ajaran
+          GROUP BY ps.id_siswa, ps.id_tahun_ajaran
+      ) p ON p.id_siswa = s.id AND p.id_tahun_ajaran = a.id_tahun_ajaran
 
       /* TOTAL TERLAMBAT */
       LEFT JOIN (
-        SELECT
-          a2.id_siswa,
-          a2.id_tahun_ajaran,
-
-          SUM(
-            a2.tipe_absensi = 'datang'
-            AND TIME(a2.created_at) > '07:00:00'
-          ) AS total_terlambat
-
+        SELECT 
+          a2.id_siswa, 
+          a2.id_tahun_ajaran, 
+          SUM(a2.status = 'terlambat') AS total_terlambat
         FROM absensi a2
-
         GROUP BY a2.id_siswa, a2.id_tahun_ajaran
-      ) aaa
-        ON aaa.id_siswa = s.id
+      ) aaa 
+        ON aaa.id_siswa = s.id 
         AND aaa.id_tahun_ajaran = a.id_tahun_ajaran
-
+      
       ${whereClause}
-
+      
       ORDER BY a.created_at DESC
-
+      
       LIMIT ? OFFSET ?
     `;
 

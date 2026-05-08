@@ -132,41 +132,94 @@ export const exportRekapKehadiranExcel = async (req, res) => {
         s.jenis_kelamin,
         sta.kelas,
 
-        COALESCE(a.total_hadir,0) AS total_hadir,
-        COALESCE(a.total_terlambat,0) AS total_terlambat,
+        COALESCE(a.total_hadir, 0) AS total_hadir,
+        COALESCE(a.total_terlambat, 0) AS total_terlambat,
 
-        COALESCE(p.total_izin,0) AS total_izin,
-        COALESCE(p.total_sakit,0) AS total_sakit,
-        COALESCE(p.total_alpha,0) AS total_alpha
+        COALESCE(p.total_izin, 0) AS total_izin,
+        COALESCE(p.total_sakit, 0) AS total_sakit,
+
+        COALESCE(ps.total_alpha, 0) AS total_alpha
 
       FROM siswa s
-      JOIN siswa_tahun_ajaran sta ON sta.id_siswa = s.id
-      JOIN tahun_ajaran ta ON sta.id_tahun_ajaran = ta.id
+
+      JOIN siswa_tahun_ajaran sta
+        ON sta.id_siswa = s.id
+
+      JOIN tahun_ajaran ta
+        ON sta.id_tahun_ajaran = ta.id
 
       LEFT JOIN (
         SELECT
-          id_siswa,
+          a.id_siswa,
           COUNT(*) AS total_hadir,
-          SUM(TIME(created_at) > '07:00:00') AS total_terlambat
-        FROM absensi
-        GROUP BY id_siswa
+          SUM(a.status = 'terlambat') AS total_terlambat
+        FROM absensi a
+
+        JOIN tahun_ajaran ta2
+          ON a.id_tahun_ajaran = ta2.id
+
+        WHERE ta2.tahun_ajaran = ?
+        AND ta2.semester = ?
+
+        GROUP BY a.id_siswa
       ) a ON a.id_siswa = s.id
 
       LEFT JOIN (
         SELECT
-          id_siswa,
-          SUM(status='izin') AS total_izin,
-          SUM(status='sakit') AS total_sakit,
-          SUM(status='alpha') AS total_alpha
-        FROM perizinan_siswa
-        GROUP BY id_siswa
+          p.id_siswa,
+
+          SUM(p.status = 'izin') AS total_izin,
+
+          SUM(p.status = 'sakit') AS total_sakit
+
+        FROM perizinan_siswa p
+
+        JOIN tahun_ajaran ta3
+          ON p.id_tahun_ajaran = ta3.id
+
+        WHERE ta3.tahun_ajaran = ?
+        AND ta3.semester = ?
+
+        GROUP BY p.id_siswa
       ) p ON p.id_siswa = s.id
+
+      LEFT JOIN (
+        SELECT
+          ps.id_siswa,
+
+          SUM(ps.id_jenis_pelanggaran = 1) AS total_alpha
+
+        FROM pelanggaran_siswa ps
+
+        JOIN tahun_ajaran ta4
+          ON ps.id_tahun_ajaran = ta4.id
+
+        WHERE ta4.tahun_ajaran = ?
+        AND ta4.semester = ?
+
+        GROUP BY ps.id_siswa
+      ) ps ON ps.id_siswa = s.id
 
       ${whereClause}
 
-      ORDER BY sta.kelas ASC;
+      ORDER BY sta.kelas ASC, s.nama ASC
     `,
-      filterValues,
+      [
+        // absensi
+        tahun_ajaran,
+        semester,
+
+        // perizinan
+        tahun_ajaran,
+        semester,
+
+        // pelanggaran
+        tahun_ajaran,
+        semester,
+
+        // main query
+        ...filterValues,
+      ],
     );
 
     const workbook = new ExcelJS.Workbook();
@@ -541,72 +594,138 @@ export const exportRekapKehadiranPDF = async (req, res) => {
     const { tahun_ajaran, semester, tingkat, kelas } = req.query;
 
     // Required Field
-    if (!tahun_ajaran || !semester)
-      return res.status(400).json({ message: "Required fields missing" });
+    if (!tahun_ajaran || !semester) {
+      return res.status(400).json({
+        message: "Required fields missing",
+      });
+    }
 
     // Query Builder
-    let whereClause = "WHERE 1=1 AND ta.tahun_ajaran = ? AND ta.semester = ?";
+    let whereClause = `
+      WHERE 1=1
+      AND ta.tahun_ajaran = ?
+      AND ta.semester = ?
+    `;
+
     const filterValues = [tahun_ajaran, semester];
 
     // Filter tingkat
     if (tingkat) {
-      whereClause += " AND (sta.kelas LIKE ?)";
+      whereClause += ` AND sta.kelas LIKE ?`;
       filterValues.push(`%${tingkat}%`);
     }
 
     // Filter kelas
     if (kelas) {
-      whereClause += " AND sta.kelas = ?";
+      whereClause += ` AND sta.kelas = ?`;
       filterValues.push(kelas);
     }
 
-    const [rows] = await db.query(
-      `
+    const query = `
       SELECT
         s.nisn,
         s.nama,
         s.jenis_kelamin,
         sta.kelas,
 
-        COALESCE(a.total_hadir,0) AS total_hadir,
-        COALESCE(a.total_terlambat,0) AS total_terlambat,
+        COALESCE(a.total_hadir, 0) AS total_hadir,
+        COALESCE(a.total_terlambat, 0) AS total_terlambat,
 
-        COALESCE(p.total_izin,0) AS total_izin,
-        COALESCE(p.total_sakit,0) AS total_sakit,
-        COALESCE(p.total_alpha,0) AS total_alpha
+        COALESCE(p.total_izin, 0) AS total_izin,
+        COALESCE(p.total_sakit, 0) AS total_sakit,
+
+        COALESCE(ps.total_alpha, 0) AS total_alpha
 
       FROM siswa s
-      JOIN siswa_tahun_ajaran sta ON sta.id_siswa = s.id
-      JOIN tahun_ajaran ta ON sta.id_tahun_ajaran = ta.id
+
+      JOIN siswa_tahun_ajaran sta
+        ON sta.id_siswa = s.id
+
+      JOIN tahun_ajaran ta
+        ON sta.id_tahun_ajaran = ta.id
 
       LEFT JOIN (
         SELECT
-          id_siswa,
+          a.id_siswa,
+
           COUNT(*) AS total_hadir,
-          SUM(TIME(created_at) > '07:00:00') AS total_terlambat
-        FROM absensi
-        GROUP BY id_siswa
+
+          SUM(a.status = 'terlambat') AS total_terlambat
+
+        FROM absensi a
+
+        JOIN tahun_ajaran ta2
+          ON a.id_tahun_ajaran = ta2.id
+
+        WHERE ta2.tahun_ajaran = ?
+        AND ta2.semester = ?
+
+        GROUP BY a.id_siswa
       ) a ON a.id_siswa = s.id
 
       LEFT JOIN (
         SELECT
-          id_siswa,
-          SUM(status='izin') AS total_izin,
-          SUM(status='sakit') AS total_sakit,
-          SUM(status='alpha') AS total_alpha
-        FROM perizinan_siswa
-        GROUP BY id_siswa
+          p.id_siswa,
+
+          SUM(p.status = 'izin') AS total_izin,
+
+          SUM(p.status = 'sakit') AS total_sakit
+
+        FROM perizinan_siswa p
+
+        JOIN tahun_ajaran ta3
+          ON p.id_tahun_ajaran = ta3.id
+
+        WHERE ta3.tahun_ajaran = ?
+        AND ta3.semester = ?
+
+        GROUP BY p.id_siswa
       ) p ON p.id_siswa = s.id
+
+      LEFT JOIN (
+        SELECT
+          ps.id_siswa,
+
+          SUM(ps.id_jenis_pelanggaran = 1) AS total_alpha
+
+        FROM pelanggaran_siswa ps
+
+        JOIN tahun_ajaran ta4
+          ON ps.id_tahun_ajaran = ta4.id
+
+        WHERE ta4.tahun_ajaran = ?
+        AND ta4.semester = ?
+
+        GROUP BY ps.id_siswa
+      ) ps ON ps.id_siswa = s.id
 
       ${whereClause}
 
-      ORDER BY sta.kelas ASC;
-    `,
-      filterValues,
-    );
+      ORDER BY sta.kelas ASC, s.nama ASC
+    `;
+
+    const [rows] = await db.query(query, [
+      // absensi
+      tahun_ajaran,
+      semester,
+
+      // perizinan
+      tahun_ajaran,
+      semester,
+
+      // pelanggaran
+      tahun_ajaran,
+      semester,
+
+      // main query
+      ...filterValues,
+    ]);
 
     const html = usePDFTemplate(`
-      <h2 style="text-align:center;">DATA REKAP KEHADIRAN</h2>
+      <h2 style="text-align:center;">
+        DATA REKAP KEHADIRAN
+      </h2>
+
       <table border="1" cellspacing="0" cellpadding="4" width="100%">
         <tr>
           <th>No</th>
@@ -620,6 +739,7 @@ export const exportRekapKehadiranPDF = async (req, res) => {
           <th>Total Alpha</th>
           <th>Total Terlambat</th>
         </tr>
+
         ${rows
           .map(
             (r, i) => `
@@ -641,22 +761,33 @@ export const exportRekapKehadiranPDF = async (req, res) => {
       </table>
     `);
 
-    const browser = await puppeteer.launch({ headless: "new" });
+    const browser = await puppeteer.launch({
+      headless: "new",
+    });
+
     const page = await browser.newPage();
+
     await page.setContent(html);
 
-    const pdf = await page.pdf({ format: "A4", landscape: false });
+    const pdf = await page.pdf({
+      format: "A4",
+      landscape: false,
+    });
+
     await browser.close();
 
     res.set({
       "Content-Type": "application/pdf",
-      "Content-Disposition": "attachment; filename=data_pelanggaran.pdf",
+      "Content-Disposition": "attachment; filename=rekap_kehadiran.pdf",
     });
 
     res.send(pdf);
   } catch (err) {
-    console.error(error);
-    res.status(500).json({ message: "Server error" });
+    console.error(err);
+
+    res.status(500).json({
+      message: "Server error",
+    });
   }
 };
 
