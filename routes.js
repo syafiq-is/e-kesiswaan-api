@@ -172,10 +172,10 @@ router.post(
 );
 
 router.delete(
-  "/absensi/nisn/:nisn/:tipe_absensi",
+  "/absensi/nipd/:nipd/:tipe_absensi",
   authMiddleware,
   requireRole(["absensi"]),
-  AbsensiController.deleteAbsensiByNISN,
+  AbsensiController.deleteAbsensiByNIPD,
 );
 
 router.delete(

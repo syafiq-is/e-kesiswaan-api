@@ -43,7 +43,7 @@ export const getAllAbsensi = async (req, res) => {
         a.status,
       
         s.nama, 
-        s.nisn,
+        s.nipd,
         
         sta.kelas,
         COALESCE(p.total_poin, 0) AS total_poin,
@@ -111,9 +111,9 @@ export const getAllAbsensi = async (req, res) => {
 /* Create Absensi */
 export const createAbsensi = async (req, res) => {
   try {
-    const { nisn, tipe_absensi } = req.body;
+    const { nipd, tipe_absensi } = req.body;
 
-    if (!nisn || !tipe_absensi) {
+    if (!nipd || !tipe_absensi) {
       return res.status(400).json({
         message: "Required fields missing",
       });
@@ -145,9 +145,9 @@ export const createAbsensi = async (req, res) => {
       `
       SELECT id
       FROM siswa
-      WHERE nisn = ?
+      WHERE nipd = ?
       `,
-      [nisn],
+      [nipd],
     );
 
     if (!siswa.length) {
@@ -302,10 +302,10 @@ export const deleteAbsensiById = async (req, res) => {
   }
 };
 
-/* Delete Absensi by nisn */
-export const deleteAbsensiByNISN = async (req, res) => {
+/* Delete Absensi by nipd */
+export const deleteAbsensiByNIPD = async (req, res) => {
   try {
-    const { nisn, tipe_absensi } = req.params;
+    const { nipd, tipe_absensi } = req.params;
 
     console.log(req.params);
 
@@ -314,8 +314,8 @@ export const deleteAbsensiByNISN = async (req, res) => {
     }
 
     // cari siswa
-    const [siswa] = await db.query("SELECT id FROM siswa WHERE nisn = ?", [
-      nisn,
+    const [siswa] = await db.query("SELECT id FROM siswa WHERE nipd = ?", [
+      nipd,
     ]);
 
     if (!siswa.length) {
@@ -379,6 +379,14 @@ export const flagUnattendedAsAlpha = async (req, res) => {
     });
 
     const batasAkhirPulang = config.batas_akhir_pulang;
+    const lastFlagAlpha = config.last_flag_alpha;
+
+    // Memastikan fungsi hanya dijalankan sekali
+    if (lastFlagAlpha == today) {
+      return res.status(400).json({
+        message: "Alpha sudah ditandai hari ini",
+      });
+    }
 
     const currentTime = new Date().toTimeString().slice(0, 8);
 
@@ -442,7 +450,7 @@ export const flagUnattendedAsAlpha = async (req, res) => {
       student.id_siswa,
       id_tahun_ajaran,
       1,
-      new Date(),
+      today,
       "Alpha ditandai oleh sistem",
     ]);
 
@@ -457,6 +465,16 @@ export const flagUnattendedAsAlpha = async (req, res) => {
       ) VALUES ?
       `,
       [alphaValues],
+    );
+
+    await db.query(
+      `
+      UPDATE config
+      SET
+        config_value = ?
+      WHERE config_key = 'last_flag_alpha'
+      `,
+      [today],
     );
 
     return res.json({
