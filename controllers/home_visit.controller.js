@@ -106,7 +106,9 @@ export const getAllHomeVisit = async (req, res) => {
 /* Create Home Visit */
 export const createHomeVisit = async (req, res) => {
   try {
-    const { id_siswa, tanggal, status } = req.body;
+    const { id_siswa, tanggal, keterangan, status } = req.body;
+
+    const gambarPath = req.file ? `uploads/${req.file.filename}` : null;
 
     if (!id_siswa || !tanggal || !status) {
       return res.status(400).json({ message: "Required fields missing" });
@@ -128,10 +130,17 @@ export const createHomeVisit = async (req, res) => {
     await db.query(
       `
       INSERT INTO home_visit
-      (id_siswa, id_tahun_ajaran, tanggal, status)
-      VALUES (?, ?, ?, ?)
+      (id_siswa, id_tahun_ajaran, tanggal, keterangan, gambar, status)
+      VALUES (?, ?, ?, ?, ?, ?)
       `,
-      [id_siswa, tahun_ajaran_aktif[0].id, tanggal, status],
+      [
+        id_siswa,
+        tahun_ajaran_aktif[0].id,
+        tanggal,
+        keterangan,
+        gambarPath,
+        status,
+      ],
     );
 
     res.status(201).json({ message: "Home visit created successfully" });
@@ -144,9 +153,11 @@ export const createHomeVisit = async (req, res) => {
 /* Update Home Visit by ID */
 export const updateHomeVisitById = async (req, res) => {
   try {
-    const { tanggal, status } = req.body;
+    const { tanggal, status, keterangan } = req.body;
 
-    if (!tanggal && !status) {
+    const gambarPath = req.file ? `uploads/${req.file.filename}` : null;
+
+    if (!tanggal && !status && !keterangan) {
       return res.status(400).json({ message: "Nothing to update" });
     }
 
@@ -159,10 +170,18 @@ export const updateHomeVisitById = async (req, res) => {
       UPDATE home_visit
       SET
         tanggal = COALESCE(?, tanggal),
-        status = COALESCE(?, status)
+        status = COALESCE(?, status),
+        keterangan = COALESCE(?, keterangan),
+        gambar = COALESCE(?, gambar)
       WHERE id = ?
       `,
-      [tanggal || null, status || null, req.params.id],
+      [
+        tanggal || null,
+        status || null,
+        keterangan || null,
+        gambarPath || null,
+        req.params.id,
+      ],
     );
 
     if (result.affectedRows === 0) {

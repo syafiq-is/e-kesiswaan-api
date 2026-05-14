@@ -343,6 +343,7 @@ router.post(
   "/home_visit",
   authMiddleware,
   requireRole(["admin", "guru_bk"]),
+  upload.single("gambar"),
   HomeVisitController.createHomeVisit,
 );
 
@@ -350,6 +351,7 @@ router.patch(
   "/home_visit/:id",
   authMiddleware,
   requireRole(["admin", "guru_bk"]),
+  upload.single("gambar"),
   HomeVisitController.updateHomeVisitById,
 );
 
