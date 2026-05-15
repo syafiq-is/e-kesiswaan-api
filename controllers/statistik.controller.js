@@ -62,7 +62,7 @@ export const getAllStatistics = async (req, res) => {
           TIME(a.created_at) AS jam_masuk
        FROM absensi a
        JOIN siswa s ON s.id = a.id_siswa
-       JOIN siswa_tahun_ajaran sta ON sta.id_siswa = s.id
+       JOIN siswa_tahun_ajaran sta ON sta.id_siswa = s.id AND sta.id_tahun_ajaran = a.id_tahun_ajaran
        WHERE DATE(a.created_at) = CURDATE()
        AND status = "terlambat"
        AND sta.id_tahun_ajaran = ?

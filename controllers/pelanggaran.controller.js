@@ -158,7 +158,7 @@ export const getAllTotalPoinSiswa = async (req, res) => {
       SELECT COUNT(DISTINCT s.id) AS total
       FROM pelanggaran_siswa ps
       JOIN siswa s ON ps.id_siswa = s.id
-      JOIN siswa_tahun_ajaran sta ON sta.id_siswa = s.id
+      JOIN siswa_tahun_ajaran sta ON sta.id_siswa = s.id AND sta.id_tahun_ajaran = ps.id_tahun_ajaran
       JOIN tahun_ajaran ta ON ps.id_tahun_ajaran = ta.id
       ${whereClause}
     `;
@@ -183,7 +183,7 @@ export const getAllTotalPoinSiswa = async (req, res) => {
 
       FROM pelanggaran_siswa ps
       JOIN siswa s ON ps.id_siswa = s.id
-      JOIN siswa_tahun_ajaran sta ON sta.id_siswa = s.id
+      JOIN siswa_tahun_ajaran sta ON sta.id_siswa = s.id AND sta.id_tahun_ajaran = ps.id_tahun_ajaran
       JOIN jenis_pelanggaran jp ON ps.id_jenis_pelanggaran = jp.id
       JOIN tahun_ajaran ta ON ps.id_tahun_ajaran = ta.id
       ${whereClause}

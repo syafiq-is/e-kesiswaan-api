@@ -30,7 +30,7 @@ export const getAllAbsensi = async (req, res) => {
       SELECT COUNT(*) as total
       FROM absensi a
       JOIN siswa s ON a.id_siswa = s.id
-      JOIN siswa_tahun_ajaran sta ON sta.id_siswa = s.id
+      JOIN siswa_tahun_ajaran sta ON sta.id_siswa = s.id AND sta.id_tahun_ajaran = a.id_tahun_ajaran
       JOIN tahun_ajaran ta ON a.id_tahun_ajaran = ta.id
       ${whereClause}
     `;
