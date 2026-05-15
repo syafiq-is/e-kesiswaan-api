@@ -134,7 +134,7 @@ export const getRekapKehadiran = async (req, res) => {
         SELECT
           a.id_siswa,
 
-          COUNT(*) AS total_hadir,
+          SUM(CASE WHEN a.tipe_absensi = 'pulang' THEN 1 ELSE 0 END) AS total_hadir,
 
           SUM(a.status = 'terlambat') AS total_terlambat
 

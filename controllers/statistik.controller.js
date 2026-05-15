@@ -213,10 +213,7 @@ export const getRekapKehadiran = async (req, res) => {
         SELECT
           id_siswa,
 
-          COUNT(DISTINCT CASE
-            WHEN status != 'alpha'
-            THEN id_siswa
-          END) AS hadir
+          SUM(CASE WHEN a.tipe_absensi = 'pulang' THEN 1 ELSE 0 END) AS hadir
 
         FROM absensi a
         WHERE ${dateConditionAbsensi}
@@ -227,15 +224,9 @@ export const getRekapKehadiran = async (req, res) => {
         SELECT
           id_siswa,
 
-          COUNT(DISTINCT CASE
-            WHEN status = 'izin'
-            THEN id_siswa
-          END) AS izin,
+          SUM(status = 'izin') AS izin,
 
-          COUNT(DISTINCT CASE
-            WHEN status = 'sakit'
-            THEN id_siswa
-          END) AS sakit
+          SUM(status = 'sakit') AS sakit
 
         FROM perizinan_siswa p
         WHERE ${dateConditionPerizinan}
@@ -246,10 +237,7 @@ export const getRekapKehadiran = async (req, res) => {
         SELECT
           id_siswa,
 
-          COUNT(DISTINCT CASE
-            WHEN id_jenis_pelanggaran = 1
-            THEN id_siswa
-          END) AS alpha
+          SUM(id_jenis_pelanggaran = 1) AS alpha
 
         FROM pelanggaran_siswa ps
         WHERE ${dateConditionPelanggaran}
