@@ -71,6 +71,26 @@ export const getAllStatistics = async (req, res) => {
       [id_tahun_ajaran],
     );
 
+    // [7] 3 Siswa Paling Rajin Tepat Waktu (Bulan Ini)
+    const [siswaRajin] = await db.query(
+      `SELECT
+        s.id,
+        s.nama,
+        sta.kelas,
+        COUNT(*) AS total_tepat_waktu
+      FROM absensi a
+      JOIN siswa s ON s.id = a.id_siswa
+      JOIN siswa_tahun_ajaran sta ON sta.id_siswa = s.id AND sta.id_tahun_ajaran = a.id_tahun_ajaran
+      WHERE MONTH(a.created_at) = MONTH(CURDATE())
+      AND YEAR(a.created_at) = YEAR(CURDATE())
+      AND a.status = "tepat waktu"
+      AND sta.id_tahun_ajaran = ?
+      GROUP BY s.id, s.nama, sta.kelas
+      ORDER BY total_tepat_waktu DESC
+      LIMIT 3`,
+      [id_tahun_ajaran],
+    );
+
     res.json({
       total_siswa: totalSiswa[0].total_siswa,
       hadir_hari_ini: hadirHariIni[0].hadir_hari_ini,
@@ -78,6 +98,7 @@ export const getAllStatistics = async (req, res) => {
       rata_rata_kedatangan: rataRata[0].rata_rata_kedatangan,
       proporsiKetepatanWaktu,
       siswaTerlambatTerkini,
+      siswaRajin,
     });
   } catch (err) {
     console.error(err);
