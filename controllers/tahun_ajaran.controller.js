@@ -121,55 +121,81 @@ export const deleteTahunAjaranById = async (req, res) => {
   }
 };
 
-export const createTahunAjaranAndPromoteStuedents = async (req, res) => {
+export const createNextTahunAjaranAndPromoteStudents = async (req, res) => {
   const connection = await db.getConnection();
 
   try {
-    const { tahun_ajaran, semester, status = "nonaktif" } = req.body;
-
-    if (!tahun_ajaran || !semester) {
-      return res.status(400).json({
-        message: "Required fields missing",
-      });
-    }
-
-    if (!["Ganjil", "Genap"].includes(semester)) {
-      return res.status(400).json({
-        message: "Invalid semester",
-      });
-    }
-
     await connection.beginTransaction();
 
-    /* ONLY ONE ACTIVE */
-    if (status === "aktif") {
-      await connection.query(`
-        UPDATE tahun_ajaran
-        SET status = 'nonaktif'
-        WHERE status = 'aktif'
-      `);
+    /* GET CURRENT ACTIVE */
+    const [activeRows] = await connection.query(`
+      SELECT *
+      FROM tahun_ajaran
+      WHERE status = 'aktif'
+      LIMIT 1
+    `);
+
+    if (activeRows.length === 0) {
+      return res.status(404).json({
+        message: "No active tahun ajaran found",
+      });
     }
 
+    const current = activeRows[0];
+
+    const currentTahun = current.tahun_ajaran; // 2025/2026
+    const currentSemester = current.semester; // Ganjil / Genap
+
+    let nextTahun;
+    let nextSemester;
+
+    if (currentSemester === "Ganjil") {
+      nextSemester = "Genap";
+      nextTahun = currentTahun;
+    } else {
+      nextSemester = "Ganjil";
+
+      const [startYear, endYear] = currentTahun.split("/").map(Number);
+
+      nextTahun = `${startYear + 1}/${endYear + 1}`;
+    }
+
+    /* DEACTIVATE CURRENT */
+    await connection.query(`
+      UPDATE tahun_ajaran
+      SET status = 'nonaktif'
+      WHERE status = 'aktif'
+    `);
+
+    /* CREATE NEW */
     const [result] = await connection.query(
       `
       INSERT INTO tahun_ajaran (
         tahun_ajaran,
         semester,
         status
-      ) VALUES (?, ?, ?)
+      ) VALUES (?, ?, 'aktif')
       `,
-      [tahun_ajaran, semester, status],
+      [nextTahun, nextSemester],
     );
 
     const newTahunAjaranId = result.insertId;
 
-    /* AUTO ENROLL / PROMOTION */
-    await promoteSiswaToNewAcademicYear(connection, newTahunAjaranId, semester);
+    /* PROMOTE STUDENTS */
+    await promoteSiswaToNewAcademicYear(
+      connection,
+      newTahunAjaranId,
+      nextSemester,
+    );
 
     await connection.commit();
 
     return res.status(201).json({
-      message: "Tahun ajaran created successfully",
+      message: "Next tahun ajaran created successfully",
+      data: {
+        tahun_ajaran: nextTahun,
+        semester: nextSemester,
+      },
     });
   } catch (err) {
     await connection.rollback();

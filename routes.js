@@ -52,10 +52,10 @@ router.post(
 );
 
 router.post(
-  "/tahun_ajaran/promote",
+  "/tahun_ajaran/next/promote",
   authMiddleware,
   requireRole(["admin"]),
-  TahunAjaranController.createTahunAjaranAndPromoteStuedents,
+  TahunAjaranController.createNextTahunAjaranAndPromoteStudents,
 );
 
 router.patch(
