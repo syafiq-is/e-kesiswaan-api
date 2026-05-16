@@ -65,8 +65,11 @@ export const getAllHomeVisit = async (req, res) => {
     const dataQuery = `
       SELECT
         hv.id,
+        hv.id_siswa,
         hv.tanggal,
         hv.status,
+        hv.keterangan,
+        hv.gambar,
         hv.created_at,
         s.nama AS nama_siswa,
         sta.kelas,
