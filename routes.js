@@ -126,6 +126,13 @@ router.get(
 );
 
 router.get(
+  "/siswa/:id",
+  authMiddleware,
+  requireRole(["admin", "guru_bk", "kepala_sekolah"]),
+  SiswaController.getSiswa,
+);
+
+router.get(
   "/siswa/kelas",
   authMiddleware,
   requireRole(["admin", "guru_bk", "kepala_sekolah"]),

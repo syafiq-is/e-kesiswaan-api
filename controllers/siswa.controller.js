@@ -109,6 +109,71 @@ export const getAllSiswa = async (req, res) => {
   }
 };
 
+/* Get Siswa */
+export const getSiswa = async (req, res) => {
+  try {
+    const [tahun_ajaran_aktif] = await db.query(
+      `
+      SELECT id
+      FROM tahun_ajaran
+      WHERE status = 'aktif'
+      LIMIT 1
+      `,
+    );
+
+    if (tahun_ajaran_aktif.length === 0) {
+      return res.status(400).json({
+        message: "No active academic year found",
+      });
+    }
+
+    const dataQuery = `
+      SELECT
+        s.id,
+        sta.kelas,
+        s.nama,
+        s.nipd,
+        s.nik,
+        s.nisn,
+        s.agama,
+        s.jenis_kelamin,
+        s.tempat_lahir,
+        s.tanggal_lahir,
+        s.nama_ayah,
+        s.pekerjaan_ayah,
+        s.nama_ibu,
+        s.pekerjaan_ibu,
+        s.nama_wali,
+        s.pekerjaan_wali,
+        s.no_telepon,
+        s.alamat,
+        s.rt,
+        s.rw,
+        s.dusun,
+        s.kelurahan,
+        s.kecamatan,
+        s.kode_pos,
+        s.gambar,
+        ta.tahun_ajaran
+      FROM siswa s 
+      JOIN siswa_tahun_ajaran sta ON sta.id_siswa = s.id
+      JOIN tahun_ajaran ta ON sta.id_tahun_ajaran = ta.id
+      WHERE s.id = ?
+      AND sta.id_tahun_ajaran = ?
+    `;
+
+    const [result] = await db.query(dataQuery, [
+      req.params.id,
+      tahun_ajaran_aktif[0].id,
+    ]);
+
+    return res.json(result);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: "Server error" });
+  }
+};
+
 /* Get All Kelas */
 export const getAllKelas = async (req, res) => {
   try {
