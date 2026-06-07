@@ -102,446 +102,264 @@ const usePDFTemplate = (data) => {
 /* Export Excel Functions */
 export const exportRekapKehadiranExcel = async (req, res) => {
   try {
-    const { tahun_ajaran, semester, tingkat, kelas } = req.query;
+    const { tahun_ajaran, semester, tingkat, kelas, bulan, month } = req.query;
 
-    // Required Field
-    if (!tahun_ajaran || !semester)
+    // Validasi parameter wajib dari Laravel
+    if (!tahun_ajaran || !semester) {
       return res.status(400).json({ message: "Required fields missing" });
+    }
 
-    // =========================
-    // GET TAHUN AJARAN DETAIL
-    // =========================
-
+    // ==========================================
+    // 1. AMBIL DATA DETAIL TAHUN AJARAN
+    // ==========================================
     const [[tahunAjaranData]] = await db.query(
-      `
-      SELECT *
-      FROM tahun_ajaran
-      WHERE tahun_ajaran = ?
-      AND semester = ?
-      LIMIT 1
-      `,
+      `SELECT * FROM tahun_ajaran WHERE tahun_ajaran = ? AND semester = ? LIMIT 1`,
       [tahun_ajaran, semester],
     );
 
     if (!tahunAjaranData) {
-      return res.status(404).json({
-        message: "Tahun ajaran not found",
-      });
+      return res.status(404).json({ message: "Tahun ajaran tidak ditemukan" });
     }
-
-    // ==================================
-    // DETERMINE MONTH RANGE BY SEMESTER
-    // ==================================
-
-    // Example:
-    // Ganjil -> Jul-Dec
-    // Genap  -> Jan-Jun
 
     const tahunMulai = Number(tahun_ajaran.split("/")[0]);
     const tahunSelesai = Number(tahun_ajaran.split("/")[1]);
 
+    const labelBulan = {
+      1: "Januari",
+      2: "Februari",
+      3: "Maret",
+      4: "April",
+      5: "Mei",
+      6: "Juni",
+      7: "Juli",
+      8: "Agustus",
+      9: "September",
+      10: "Oktober",
+      11: "November",
+      12: "Desember",
+    };
+
+    // ==========================================
+    // 2. LOGIKA PILIHAN BULAN (DINAMIS)
+    // ==========================================
+    const targetBulan = parseInt(bulan || month);
     let months = [];
 
-    if (semester === "Ganjil") {
+    if (targetBulan) {
+      // Jika user memilih bulan spesifik di dropdown, ekspor bulan itu saja
+      const targetYear = targetBulan >= 7 ? tahunMulai : tahunSelesai;
       months = [
-        { month: 7, year: tahunMulai, label: "Juli" },
-        { month: 8, year: tahunMulai, label: "Agustus" },
-        { month: 9, year: tahunMulai, label: "September" },
-        { month: 10, year: tahunMulai, label: "Oktober" },
-        { month: 11, year: tahunMulai, label: "November" },
-        { month: 12, year: tahunMulai, label: "Desember" },
+        {
+          month: targetBulan,
+          year: targetYear,
+          label: labelBulan[targetBulan],
+        },
       ];
     } else {
-      months = [
-        { month: 1, year: tahunSelesai, label: "Januari" },
-        { month: 2, year: tahunSelesai, label: "Februari" },
-        { month: 3, year: tahunSelesai, label: "Maret" },
-        { month: 4, year: tahunSelesai, label: "April" },
-        { month: 5, year: tahunSelesai, label: "Mei" },
-        { month: 6, year: tahunSelesai, label: "Juni" },
-      ];
+      // Jika bulan kosong (default), ekspor seluruh bulan dalam semester tersebut
+      if (semester === "Ganjil") {
+        months = [
+          { month: 7, year: tahunMulai, label: "Juli" },
+          { month: 8, year: tahunMulai, label: "Agustus" },
+          { month: 9, year: tahunMulai, label: "September" },
+          { month: 10, year: tahunMulai, label: "Oktober" },
+          { month: 11, year: tahunMulai, label: "November" },
+          { month: 12, year: tahunMulai, label: "Desember" },
+        ];
+      } else {
+        months = [
+          { month: 1, year: tahunSelesai, label: "Januari" },
+          { month: 2, year: tahunSelesai, label: "Februari" },
+          { month: 3, year: tahunSelesai, label: "Maret" },
+          { month: 4, year: tahunSelesai, label: "April" },
+          { month: 5, year: tahunSelesai, label: "Mei" },
+          { month: 6, year: tahunSelesai, label: "Juni" },
+        ];
+      }
     }
 
-    // =========================
-    // FILTER
-    // =========================
-
-    let whereClause = `
-      WHERE sta.id_tahun_ajaran = ?
-    `;
-
+    // ==========================================
+    // 3. LOGIKA FILTER KELAS & TINGKAT
+    // ==========================================
+    let whereClause = " WHERE sta.id_tahun_ajaran = ? ";
     const filterValues = [tahunAjaranData.id];
 
     if (tingkat) {
-      whereClause += ` AND sta.kelas LIKE ?`;
+      whereClause += " AND sta.kelas LIKE ? ";
       filterValues.push(`%${tingkat}%`);
     }
 
     if (kelas) {
-      whereClause += ` AND sta.kelas = ?`;
+      whereClause += " AND sta.kelas = ? ";
       filterValues.push(kelas);
     }
 
-    // =========================
-    // EXCEL
-    // =========================
-
+    // Buat objek Workbook ExcelJS baru
     const workbook = new ExcelJS.Workbook();
 
-    // =========================
-    // LOOP EACH MONTH
-    // =========================
-
+    // ==========================================
+    // 4. LOOPING PEMBUATAN SHEET PER BULAN
+    // ==========================================
     for (const item of months) {
       const { month, year, label } = item;
-
       const daysInMonth = new Date(year, month, 0).getDate();
 
-      const startDate = `${year}-${String(month).padStart(2, "0")}-01`;
-
-      const nextMonthDate =
-        month === 12
-          ? `${year + 1}-01-01`
-          : `${year}-${String(month + 1).padStart(2, "0")}-01`;
-
-      // =========================
-      // BUILD DYNAMIC DAY COLUMNS
-      // =========================
-
+      // Merajut kolom tanggal dinamis (Mencetak huruf H / I / S / A langsung via SQL)
       let selectDays = "";
-
       for (let d = 1; d <= daysInMonth; d++) {
         selectDays += `
           COALESCE(
-            MAX(
-              CASE
-                WHEN DAY(a.tanggal) = ${d}
-                THEN a.hadir
-              END
-            ),
-            0
-          ) AS \`${d}\`,
-        `;
+            (SELECT 'H' FROM absensi WHERE id_siswa = s.id AND id_tahun_ajaran = ta.id AND DAY(created_at) = ${d} AND MONTH(created_at) = ${month} AND YEAR(created_at) = ${year} LIMIT 1),
+            (SELECT CASE WHEN status = 'izin' THEN 'I' WHEN status = 'sakit' THEN 'S' END FROM perizinan_siswa WHERE id_siswa = s.id AND id_tahun_ajaran = ta.id AND DAY(tanggal) = ${d} AND MONTH(tanggal) = ${month} AND YEAR(tanggal) = ${year} LIMIT 1),
+            (SELECT 'A' FROM pelanggaran_siswa WHERE id_siswa = s.id AND id_tahun_ajaran = ta.id AND id_jenis_pelanggaran = 1 AND DAY(tanggal) = ${d} AND MONTH(tanggal) = ${month} AND YEAR(tanggal) = ${year} LIMIT 1),
+            '-'
+          ) AS \`d${d}\`,\n`;
       }
 
-      // =========================
-      // QUERY
-      // =========================
+      // Pastikan mengisi nilai default '-' untuk sisa hari jika bulan < 31 hari
+      for (let d = daysInMonth + 1; d <= 31; d++) {
+        selectDays += `'-' AS \`d${d}\`,\n`;
+      }
 
+      // Query Laporan Excel Terintegrasi Akumulasi Total Bulan Berjalan
       const query = `
         SELECT
           s.nisn,
           s.nama,
           s.jenis_kelamin,
           sta.kelas,
-
           ${selectDays}
-
           COALESCE(att.total_hadir, 0) AS total_hadir,
           COALESCE(att.total_terlambat, 0) AS total_terlambat,
-
           COALESCE(iz.total_izin, 0) AS total_izin,
           COALESCE(iz.total_sakit, 0) AS total_sakit,
-
           COALESCE(pl.total_alpha, 0) AS total_alpha
-
         FROM siswa s
-
-        JOIN siswa_tahun_ajaran sta
-          ON sta.id_siswa = s.id
-
-        LEFT JOIN (
-
-          SELECT
-            id_siswa,
-            id_tahun_ajaran,
-            DATE(created_at) AS tanggal,
-
-            CASE
-              WHEN COUNT(DISTINCT tipe_absensi) = 2
-              THEN 1
-              ELSE 0
-            END AS hadir
-
-          FROM absensi
-
-          WHERE id_tahun_ajaran = ?
-            AND created_at >= ?
-            AND created_at < ?
-
-          GROUP BY
-            id_siswa,
-            id_tahun_ajaran,
-            DATE(created_at)
-
-        ) a
-          ON a.id_siswa = s.id
-          AND a.id_tahun_ajaran = sta.id_tahun_ajaran
-
+        JOIN siswa_tahun_ajaran sta ON sta.id_siswa = s.id
+        JOIN tahun_ajaran ta ON sta.id_tahun_ajaran = ta.id
         LEFT JOIN (
           SELECT
             id_siswa,
-            SUM(CASE WHEN tipe_absensi = 'pulang' THEN 1 ELSE 0 END) AS total_hadir,
+            COUNT(DISTINCT DATE(created_at)) AS total_hadir,
             SUM(status = 'terlambat') AS total_terlambat
           FROM absensi
-          WHERE id_tahun_ajaran = ?
-            AND created_at >= ?
-            AND created_at < ?
+          WHERE id_tahun_ajaran = ? AND MONTH(created_at) = ? AND YEAR(created_at) = ?
           GROUP BY id_siswa
-        ) att
-          ON att.id_siswa = s.id
-
+        ) att ON att.id_siswa = s.id
         LEFT JOIN (
           SELECT
             id_siswa,
             SUM(status = 'izin') AS total_izin,
             SUM(status = 'sakit') AS total_sakit
           FROM perizinan_siswa
-          WHERE id_tahun_ajaran = ?
-            AND tanggal >= ?
-            AND tanggal < ?
+          WHERE id_tahun_ajaran = ? AND MONTH(tanggal) = ? AND YEAR(tanggal) = ?
           GROUP BY id_siswa
-        ) iz
-          ON iz.id_siswa = s.id
-
+        ) iz ON iz.id_siswa = s.id
         LEFT JOIN (
           SELECT
             id_siswa,
             SUM(id_jenis_pelanggaran = 1) AS total_alpha
           FROM pelanggaran_siswa
-          WHERE id_tahun_ajaran = ?
-            AND tanggal >= ?
-            AND tanggal < ?
+          WHERE id_tahun_ajaran = ? AND MONTH(tanggal) = ? AND YEAR(tanggal) = ?
           GROUP BY id_siswa
-        ) pl
-          ON pl.id_siswa = s.id
-
+        ) pl ON pl.id_siswa = s.id
         ${whereClause}
-
-        GROUP BY
-          s.id,
-          s.nisn,
-          s.nama,
-          s.jenis_kelamin,
-          sta.kelas
-
-        ORDER BY
-          sta.kelas ASC,
-          s.nama ASC
+        GROUP BY s.id, s.nisn, s.nama, s.jenis_kelamin, sta.kelas
+        ORDER BY sta.kelas ASC, s.nama ASC
       `;
 
       const [rows] = await db.query(query, [
-        // attendance matrix
         tahunAjaranData.id,
-        startDate,
-        nextMonthDate,
-
-        // attendance summary
+        month,
+        year, // Summary kehadiran
         tahunAjaranData.id,
-        startDate,
-        nextMonthDate,
-
-        // izin sakit
+        month,
+        year, // Summary izin sakit
         tahunAjaranData.id,
-        startDate,
-        nextMonthDate,
-
-        // alpha
-        tahunAjaranData.id,
-        startDate,
-        nextMonthDate,
-
-        // filter
+        month,
+        year, // Summary alpha
         ...filterValues,
       ]);
 
-      // =========================
-      // CREATE SHEET
-      // =========================
-
       const worksheet = workbook.addWorksheet(`${label} ${year}`);
 
-      // =========================
-      // BUILD COLUMNS
-      // =========================
-
+      // Struktur Kolom Laporan Excel
       const columns = [
         { header: "NISN", key: "nisn", width: 18 },
-        { header: "Nama", key: "nama", width: 28 },
+        { header: "Nama", key: "nama", width: 30 },
         { header: "JK", key: "jenis_kelamin", width: 8 },
         { header: "Kelas", key: "kelas", width: 10 },
       ];
 
-      // dynamic dates
       for (let d = 1; d <= daysInMonth; d++) {
-        columns.push({
-          header: String(d),
-          key: String(d),
-          width: 5,
-        });
+        columns.push({ header: String(d), key: `d${d}`, width: 5 });
       }
 
-      // summary columns
       columns.push(
         { header: "Hadir", key: "total_hadir", width: 10 },
-        { header: "Terlambat", key: "total_terlambat", width: 12 },
-        { header: "Izin", key: "total_izin", width: 10 },
         { header: "Sakit", key: "total_sakit", width: 10 },
+        { header: "Izin", key: "total_izin", width: 10 },
         { header: "Alpha", key: "total_alpha", width: 10 },
+        { header: "Terlambat", key: "total_terlambat", width: 12 },
       );
 
-      // ======================================
-      // TOTAL DATE COLUMNS
-      // ======================================
+      worksheet.columns = columns;
 
-      const startTanggalCol = 5;
-      const endTanggalCol = startTanggalCol + daysInMonth - 1;
+      // Header Styling
+      const headerRow = worksheet.getRow(1);
+      headerRow.font = { bold: true };
+      headerRow.alignment = { vertical: "middle", horizontal: "center" };
 
-      const startJumlahCol = endTanggalCol + 1;
-      const endJumlahCol = startJumlahCol + 4;
-
-      // ======================================
-      // MERGED HEADER
-      // ======================================
-
-      // static columns
-      worksheet.mergeCells("A1:A2");
-      worksheet.mergeCells("B1:B2");
-      worksheet.mergeCells("C1:C2");
-      worksheet.mergeCells("D1:D2");
-
-      // tanggal group
-      worksheet.mergeCells(1, startTanggalCol, 1, endTanggalCol);
-
-      // jumlah group
-      worksheet.mergeCells(1, startJumlahCol, 1, endJumlahCol);
-
-      // ======================================
-      // HEADER VALUES
-      // ======================================
-
-      worksheet.getCell("A1").value = "NISN";
-      worksheet.getCell("B1").value = "Nama";
-      worksheet.getCell("C1").value = "JK";
-      worksheet.getCell("D1").value = "Kelas";
-
-      worksheet.getCell(1, startTanggalCol).value = "Tanggal";
-      worksheet.getCell(1, startJumlahCol).value = "Jumlah";
-
-      // ======================================
-      // DATE HEADER
-      // ======================================
-
-      for (let d = 1; d <= daysInMonth; d++) {
-        worksheet.getCell(2, startTanggalCol + d - 1).value = d;
-      }
-
-      // ======================================
-      // SUMMARY HEADER
-      // ======================================
-
-      worksheet.getCell(2, startJumlahCol).value = "Hadir";
-      worksheet.getCell(2, startJumlahCol + 1).value = "Terlambat";
-      worksheet.getCell(2, startJumlahCol + 2).value = "Izin";
-      worksheet.getCell(2, startJumlahCol + 3).value = "Sakit";
-      worksheet.getCell(2, startJumlahCol + 4).value = "Alpha";
-
-      // ======================================
-      // HEADER STYLE
-      // ======================================
-
-      const headerRows = [1, 2];
-
-      headerRows.forEach((rowNumber) => {
-        const row = worksheet.getRow(rowNumber);
-
-        row.font = {
-          bold: true,
-        };
-
-        row.alignment = {
-          vertical: "middle",
-          horizontal: "center",
-        };
-      });
-
-      // ======================================
-      // COLUMN WIDTHS
-      // ======================================
-
-      worksheet.getColumn("A").width = 18;
-      worksheet.getColumn("B").width = 28;
-      worksheet.getColumn("C").width = 8;
-      worksheet.getColumn("D").width = 10;
-
-      // tanggal columns
-      for (let col = startTanggalCol; col <= endTanggalCol; col++) {
-        worksheet.getColumn(col).width = 5;
-      }
-
-      // jumlah columns
-      for (let col = startJumlahCol; col <= endJumlahCol; col++) {
-        worksheet.getColumn(col).width = 12;
-      }
-
-      // ======================================
-      // INSERT DATA
-      // ======================================
-
-      let currentRow = 3;
-
+      // Memasukkan Baris Data
+      // ==========================================
+      // 5. MEMASUKKAN BARIS DATA RIIL SISWA
+      // ==========================================
       rows.forEach((row) => {
-        const rowData = [row.nisn, row.nama, row.jenis_kelamin, row.kelas];
+        const rowData = {
+          nisn: row.nisn,
+          nama: row.nama,
+          jenis_kelamin: row.jenis_kelamin,
+          kelas: row.kelas,
+          total_hadir: row.total_hadir,
+          total_sakit: row.total_sakit,
+          total_izin: row.total_izin,
+          total_alpha: row.total_alpha,
+          total_terlambat: row.total_terlambat,
+        };
 
-        // tanggal
+        // Loop untuk memetakan tanggal 1-31
         for (let d = 1; d <= daysInMonth; d++) {
-          rowData.push(row[d] ?? 0);
+          // Bersihkan spasi gaib dan pastikan huruf kapital
+          let status = row[`d${d}`]
+            ? String(row[`d${d}`]).trim().toUpperCase()
+            : "-";
+
+          // Ubah huruf 'H' menjadi centang '✓', selain itu biarkan aslinya (S/I/A/-)
+          rowData[`d${d}`] = status === "H" ? "✓" : status;
         }
 
-        // jumlah
-        rowData.push(
-          row.total_hadir,
-          row.total_terlambat,
-          row.total_izin,
-          row.total_sakit,
-          row.total_alpha,
-        );
-
-        worksheet.insertRow(currentRow, rowData);
-
-        currentRow++;
+        worksheet.addRow(rowData);
       });
 
-      // ======================================
-      // FREEZE HEADER
-      // ======================================
-
-      worksheet.views = [
-        {
-          state: "frozen",
-          ySplit: 2,
-        },
-      ];
+      worksheet.views = [{ state: "frozen", ySplit: 1 }];
     }
 
-    // =========================
-    // RESPONSE
-    // =========================
+    // Penamaan File Output Dinamis
+    let filename = "rekap_kehadiran";
+    if (kelas) filename += `_Kelas_${kelas}`;
+    if (targetBulan) filename += `_Bulan_${labelBulan[targetBulan]}`;
+    filename += `_${tahun_ajaran.replace("/", "-")}.xlsx`;
 
     res.setHeader(
       "Content-Type",
       "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
     );
-
-    res.setHeader(
-      "Content-Disposition",
-      `attachment; filename=rekap_kehadiran_${tahun_ajaran}_${semester}.xlsx`,
-    );
+    res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
 
     await workbook.xlsx.write(res);
     res.end();
   } catch (err) {
-    console.error(error);
+    console.error("Export Excel Error: ", err);
     res.status(500).json({ message: "Server error" });
   }
 };

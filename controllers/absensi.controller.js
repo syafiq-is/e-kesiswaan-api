@@ -35,10 +35,11 @@ export const getAllAbsensi = async (req, res) => {
       ${whereClause}
     `;
 
+    // FIX: Menggunakan DATE_FORMAT agar Node.js tidak memundurkan waktu 7 jam (UTC/WIB)
     const dataQuery = `
       SELECT 
         a.id, 
-        a.created_at, 
+        DATE_FORMAT(a.created_at, '%Y-%m-%d %H:%i:%s') AS created_at, 
         a.tipe_absensi, 
         a.status,
       
@@ -211,15 +212,36 @@ export const createAbsensi = async (req, res) => {
 
       await db.query(
         `
-        INSERT INTO absensi (
-          id_siswa,
-          id_tahun_ajaran,
-          tipe_absensi,
-          status
-        ) VALUES (?, ?, ?, ?)
-        `,
+    INSERT INTO absensi (
+      id_siswa,
+      id_tahun_ajaran,
+      tipe_absensi,
+      status
+    ) VALUES (?, ?, ?, ?)
+    `,
         [id_siswa, tahun_ajaran_aktif[0].id, tipe_absensi, status],
       );
+
+      // Tambah poin jika terlambat
+      if (status === "terlambat") {
+        await db.query(
+          `
+      INSERT INTO pelanggaran_siswa (
+        id_siswa,
+        id_jenis_pelanggaran,
+        id_tahun_ajaran,
+        tanggal,
+        keterangan
+      ) VALUES (?, ?, ?, CURDATE(), ?)
+      `,
+          [
+            id_siswa,
+            6, // id_jenis_pelanggaran = 6 (terlambat)
+            tahun_ajaran_aktif[0].id,
+            "Terlambat absensi (+5 poin)",
+          ],
+        );
+      }
 
       return res.status(201).json({
         message: "Absensi datang created successfully",
@@ -407,35 +429,20 @@ export const flagUnattendedAsAlpha = async (req, res) => {
 
     const [students] = await db.query(
       `
-      SELECT
-        s.id AS id_siswa
+      SELECT s.id AS id_siswa
       FROM siswa s
 
-      /* CHECK IZIN TODAY */
       LEFT JOIN perizinan_siswa ps
         ON ps.id_siswa = s.id
         AND ps.tanggal = CURDATE()
 
-      /* CHECK DATANG */
-      LEFT JOIN absensi datang
-        ON datang.id_siswa = s.id
-        AND datang.tipe_absensi = 'datang'
-        AND DATE(datang.created_at) = CURDATE()
-
-      /* CHECK PULANG */
-      LEFT JOIN absensi pulang
-        ON pulang.id_siswa = s.id
-        AND pulang.tipe_absensi = 'pulang'
-        AND DATE(pulang.created_at) = CURDATE()
-
       WHERE
         ps.id IS NULL
-        AND (
-          datang.id IS NULL
-          OR (
-            datang.id IS NOT NULL
-            AND pulang.id IS NULL
-          )
+        AND NOT EXISTS (
+          SELECT 1
+          FROM absensi a
+          WHERE a.id_siswa = s.id
+          AND DATE(a.created_at) = CURDATE()
         )
       `,
     );
