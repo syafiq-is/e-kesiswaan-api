@@ -1080,6 +1080,138 @@ export const exportRekapKehadiranPDF = async (req, res) => {
   }
 };
 
+export const exportDataKehadiranExcel = async (req, res) => {
+  try {
+    const { tahun_ajaran, semester, tingkat, kelas, search, date } = req.query;
+
+    if (!tahun_ajaran || !semester) {
+      return res.status(400).json({ message: "Required fields missing" });
+    }
+
+    let params = [];
+
+    let sql = `
+      SELECT
+          s.nama,
+          sta.kelas,
+
+          MAX(CASE WHEN a.tipe_absensi = 'datang' THEN TIME(a.created_at) END) AS jam_datang,
+          MAX(CASE WHEN a.tipe_absensi = 'pulang' THEN TIME(a.created_at) END) AS jam_pulang,
+
+          CASE
+              WHEN MAX(CASE WHEN a.tipe_absensi IN ('datang','pulang') THEN 1 END) IS NOT NULL
+                  THEN 'hadir'
+
+              WHEN MAX(CASE WHEN ps.id_jenis_pelanggaran = 1 THEN 1 END) IS NOT NULL
+                  THEN 'alfa'
+
+              ELSE 'belum absen'
+          END AS status
+
+      FROM siswa s
+      JOIN siswa_tahun_ajaran sta ON sta.id_siswa = s.id
+      JOIN tahun_ajaran ta ON ta.id = sta.id_tahun_ajaran
+
+      LEFT JOIN absensi a
+        ON a.id_siswa = s.id
+    `;
+
+    // DATE FILTER (TETAP SAMA)
+    if (date) {
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+        return res.status(400).json({ message: "Invalid date format" });
+      }
+
+      sql += `
+        AND a.created_at >= ?
+        AND a.created_at < DATE_ADD(?, INTERVAL 1 DAY)
+      `;
+
+      params.push(date, date);
+    }
+
+    sql += `
+      LEFT JOIN pelanggaran_siswa ps
+        ON ps.id_siswa = s.id
+        AND ps.id_tahun_ajaran = ta.id
+        AND ps.id_jenis_pelanggaran = 1
+    `;
+
+    if (date) {
+      sql += ` AND DATE(ps.tanggal) = ? `;
+      params.push(date);
+    }
+
+    sql += `
+      WHERE ta.tahun_ajaran = ?
+        AND ta.semester = ?
+    `;
+
+    params.push(tahun_ajaran, semester);
+
+    if (tingkat) {
+      sql += ` AND sta.kelas LIKE ? `;
+      params.push(`%${tingkat}%`);
+    }
+
+    if (kelas) {
+      sql += ` AND sta.kelas = ? `;
+      params.push(kelas);
+    }
+
+    if (search) {
+      sql += ` AND (s.nama LIKE ? OR s.nisn LIKE ?) `;
+      params.push(`%${search}%`, `%${search}%`);
+    }
+
+    sql += `
+      GROUP BY s.id, s.nama, sta.kelas
+      ORDER BY sta.kelas, s.nama
+    `;
+
+    const [rows] = await db.query(sql, params);
+
+    // =========================
+    // EXCEL GENERATION ONLY
+    // =========================
+    const workbook = new ExcelJS.Workbook();
+    const sheet = workbook.addWorksheet("Kehadiran");
+
+    sheet.columns = [
+      { header: "Nama", key: "nama", width: 25 },
+      { header: "Kelas", key: "kelas", width: 10 },
+      { header: "Jam Datang", key: "jam_datang", width: 15 },
+      { header: "Jam Pulang", key: "jam_pulang", width: 15 },
+      { header: "Status", key: "status", width: 15 },
+    ];
+
+    rows.forEach((r) => {
+      sheet.addRow({
+        nama: r.nama,
+        kelas: r.kelas,
+        jam_datang: r.jam_datang || "-",
+        jam_pulang: r.jam_pulang || "-",
+        status: r.status,
+      });
+    });
+
+    sheet.getRow(1).font = { bold: true };
+
+    res.setHeader(
+      "Content-Type",
+      "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    );
+
+    res.setHeader("Content-Disposition", `attachment; filename=kehadiran.xlsx`);
+
+    await workbook.xlsx.write(res);
+    res.end();
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({ message: "Server error" });
+  }
+};
+
 export const exportPelanggaranPDF = async (req, res) => {
   try {
     const { tahun_ajaran, semester, tingkat, kelas } = req.query;
@@ -1544,7 +1676,6 @@ export const importSiswaExcel = async (req, res) => {
       firstInsertedId + index,
       s.id_tahun_ajaran,
       s.kelas,
-      "aktif",
     ]);
 
     await connection.query(
@@ -1552,8 +1683,7 @@ export const importSiswaExcel = async (req, res) => {
       INSERT INTO siswa_tahun_ajaran (
         id_siswa,
         id_tahun_ajaran,
-        kelas,
-        status
+        kelas
       ) VALUES ?
     `,
       [enrollmentValues],

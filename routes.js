@@ -193,6 +193,13 @@ router.delete(
 );
 
 router.get(
+  "/data_kehadiran",
+  authMiddleware,
+  requireRole(["admin", "guru_bk", "kepala_sekolah"]),
+  RekapKehadiranController.getDataKehadiran,
+);
+
+router.get(
   "/rekap_kehadiran",
   authMiddleware,
   requireRole(["admin", "guru_bk", "kepala_sekolah"]),
@@ -433,6 +440,12 @@ router.get(
   authMiddleware,
   requireRole(["admin", "guru_bk"]),
   ExportImportController.exportRekapKehadiranPDF,
+);
+router.get(
+  "/export/data_kehadiran/excel",
+  authMiddleware,
+  requireRole(["admin", "guru_bk"]),
+  ExportImportController.exportDataKehadiranExcel,
 );
 router.get(
   "/export/pelanggaran/pdf",

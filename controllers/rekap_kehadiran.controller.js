@@ -213,3 +213,101 @@ export const getRekapKehadiran = async (req, res) => {
     res.status(500).json({ message: "Server error" });
   }
 };
+
+export const getDataKehadiran = async (req, res) => {
+  try {
+    const { tahun_ajaran, semester, tingkat, kelas, search, date } = req.query;
+
+    if (!tahun_ajaran || !semester) {
+      return res.status(400).json({ message: "Required fields missing" });
+    }
+
+    let params = [];
+
+    let sql = `
+      SELECT
+          s.nama,
+          sta.kelas,
+
+          MAX(CASE WHEN a.tipe_absensi = 'datang' THEN TIME(a.created_at) END) AS jam_datang,
+          MAX(CASE WHEN a.tipe_absensi = 'pulang' THEN TIME(a.created_at) END) AS jam_pulang,
+
+          CASE
+              WHEN MAX(CASE WHEN a.tipe_absensi IN ('datang','pulang') THEN 1 END) IS NOT NULL
+                  THEN 'hadir'
+
+              WHEN MAX(CASE WHEN ps.id_jenis_pelanggaran = 1 THEN 1 END) IS NOT NULL
+                  THEN 'alfa'
+
+              ELSE 'belum absen'
+          END AS status
+
+      FROM siswa s
+      JOIN siswa_tahun_ajaran sta ON sta.id_siswa = s.id
+      JOIN tahun_ajaran ta ON ta.id = sta.id_tahun_ajaran
+
+      LEFT JOIN absensi a
+        ON a.id_siswa = s.id
+    `;
+
+    // DATE FILTER (ABSENSI JOIN SAFE)
+    if (date) {
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+        return res.status(400).json({ message: "Invalid date format" });
+      }
+
+      sql += `
+        AND a.created_at >= ?
+        AND a.created_at < DATE_ADD(?, INTERVAL 1 DAY)
+      `;
+
+      params.push(date, date);
+    }
+
+    sql += `
+      LEFT JOIN pelanggaran_siswa ps
+        ON ps.id_siswa = s.id
+        AND ps.id_tahun_ajaran = ta.id
+        AND ps.id_jenis_pelanggaran = 1
+    `;
+
+    if (date) {
+      sql += ` AND DATE(ps.tanggal) = ? `;
+      params.push(date);
+    }
+
+    sql += `
+      WHERE ta.tahun_ajaran = ?
+        AND ta.semester = ?
+    `;
+
+    params.push(tahun_ajaran, semester);
+
+    if (tingkat) {
+      sql += ` AND sta.kelas LIKE ? `;
+      params.push(`%${tingkat}%`);
+    }
+
+    if (kelas) {
+      sql += ` AND sta.kelas = ? `;
+      params.push(kelas);
+    }
+
+    if (search) {
+      sql += ` AND (s.nama LIKE ? OR s.nisn LIKE ?) `;
+      params.push(`%${search}%`, `%${search}%`);
+    }
+
+    sql += `
+      GROUP BY s.id, s.nama, sta.kelas
+      ORDER BY sta.kelas, s.nama
+    `;
+
+    const [rows] = await db.query(sql, params);
+
+    return res.json(rows);
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({ message: "Server error" });
+  }
+};

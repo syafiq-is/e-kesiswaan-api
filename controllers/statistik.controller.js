@@ -212,8 +212,7 @@ export const getRekapKehadiran = async (req, res) => {
       LEFT JOIN (
         SELECT
           id_siswa,
-
-          SUM(CASE WHEN a.tipe_absensi = 'pulang' THEN 1 ELSE 0 END) AS hadir
+          1 AS hadir
 
         FROM absensi a
         WHERE ${dateConditionAbsensi}
