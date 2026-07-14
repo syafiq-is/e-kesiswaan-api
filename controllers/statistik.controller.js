@@ -77,16 +77,19 @@ export const getAllStatistics = async (req, res) => {
         s.id,
         s.nama,
         sta.kelas,
-        COUNT(*) AS total_tepat_waktu
+        COUNT(*) AS total_tepat_waktu,
+        SEC_TO_TIME(AVG(TIME_TO_SEC(TIME(a.created_at)))) AS rata_rata_datang
       FROM absensi a
       JOIN siswa s ON s.id = a.id_siswa
-      JOIN siswa_tahun_ajaran sta ON sta.id_siswa = s.id AND sta.id_tahun_ajaran = a.id_tahun_ajaran
+      JOIN siswa_tahun_ajaran sta
+        ON sta.id_siswa = s.id
+        AND sta.id_tahun_ajaran = a.id_tahun_ajaran
       WHERE MONTH(a.created_at) = MONTH(CURDATE())
-      AND YEAR(a.created_at) = YEAR(CURDATE())
-      AND a.status = "tepat waktu"
-      AND sta.id_tahun_ajaran = ?
+        AND YEAR(a.created_at) = YEAR(CURDATE())
+        AND a.status = 'tepat waktu'
+        AND sta.id_tahun_ajaran = ?
       GROUP BY s.id, s.nama, sta.kelas
-      ORDER BY total_tepat_waktu DESC
+      ORDER BY total_tepat_waktu DESC, rata_rata_datang ASC
       LIMIT 3`,
       [id_tahun_ajaran],
     );
