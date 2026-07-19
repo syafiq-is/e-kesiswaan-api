@@ -434,8 +434,8 @@ router.patch(
 /* ===== Export Import Routes ===== */
 router.get(
   "/export/absensi/excel",
-  // authMiddleware,
-  // requireRole(["admin", "guru_bk"]),
+  authMiddleware,
+  requireRole(["admin", "guru_bk"]),
   ExportImportController.exportRekapKehadiranExcel,
 );
 router.get(
