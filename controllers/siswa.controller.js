@@ -174,22 +174,6 @@ export const getSiswa = async (req, res) => {
   }
 };
 
-/* Get All Kelas */
-export const getAllKelas = async (req, res) => {
-  try {
-    const [rows] = await db.query(
-      `SELECT DISTINCT kelas FROM siswa_tahun_ajaran`,
-    );
-    const kelasList = rows.map((r) => r.kelas);
-
-    res.json({
-      kelas_list: kelasList,
-    });
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ message: "Server error" });
-  }
-};
 /* Create Siswa */
 export const createSiswa = async (req, res) => {
   const connection = await db.getConnection();

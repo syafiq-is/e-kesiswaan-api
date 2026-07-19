@@ -53,7 +53,7 @@ export const getAllStatistics = async (req, res) => {
     const proporsiKetepatanWaktu =
       total > 0 ? Number((hadir / total).toFixed(2)) : 0;
 
-    // [6] 5 Siswa Terlambat Terkini (Hari Ini)
+    // [6] 50 Siswa Terlambat Terkini (Hari Ini)
     const [siswaTerlambatTerkini] = await db.query(
       `SELECT
           s.id,
@@ -67,11 +67,11 @@ export const getAllStatistics = async (req, res) => {
        AND status = "terlambat"
        AND sta.id_tahun_ajaran = ?
        ORDER BY a.created_at DESC
-       LIMIT 5`,
+       LIMIT 50`,
       [id_tahun_ajaran],
     );
 
-    // [7] 3 Siswa Paling Rajin Tepat Waktu (Bulan Ini)
+    // [7] 10 Siswa Paling Rajin Tepat Waktu (Bulan Ini)
     const [siswaRajin] = await db.query(
       `SELECT
         s.id,
@@ -90,7 +90,7 @@ export const getAllStatistics = async (req, res) => {
         AND sta.id_tahun_ajaran = ?
       GROUP BY s.id, s.nama, sta.kelas
       ORDER BY total_tepat_waktu DESC, rata_rata_datang ASC
-      LIMIT 3`,
+      LIMIT 10`,
       [id_tahun_ajaran],
     );
 

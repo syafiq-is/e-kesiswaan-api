@@ -134,8 +134,7 @@ export const getRekapKehadiran = async (req, res) => {
         SELECT
           a.id_siswa,
 
-          SUM(CASE WHEN a.tipe_absensi = 'pulang' THEN 1 ELSE 0 END) AS total_hadir,
-
+          COUNT(DISTINCT CASE WHEN tipe_absensi IN ('datang', 'pulang') THEN DATE(a.created_at) END) AS total_hadir,
           SUM(a.status = 'terlambat') AS total_terlambat
 
         FROM absensi a
@@ -153,7 +152,6 @@ export const getRekapKehadiran = async (req, res) => {
           p.id_siswa,
 
           SUM(p.status = 'izin') AS total_izin,
-
           SUM(p.status = 'sakit') AS total_sakit
 
         FROM perizinan_siswa p
@@ -184,7 +182,7 @@ export const getRekapKehadiran = async (req, res) => {
 
       ${whereClause}
 
-      ORDER BY s.nama ASC
+      ORDER BY sta.kelas, s.nama ASC
       LIMIT ? OFFSET ?
     `;
 
@@ -211,6 +209,248 @@ export const getRekapKehadiran = async (req, res) => {
   } catch (err) {
     console.error(err);
     res.status(500).json({ message: "Server error" });
+  }
+};
+
+export const getRekapKehadiranBK = async (req, res) => {
+  try {
+    const {
+      page = 1,
+      limit = 10,
+      tahun_ajaran,
+      semester,
+      kelas,
+      bulan = 1, // default Januari
+    } = req.query;
+
+    if (!tahun_ajaran || !semester) {
+      return res.status(400).json({
+        message: "tahun_ajaran and semester are required",
+      });
+    }
+
+    // =========================
+    // GET TAHUN AJARAN
+    // =========================
+
+    const [[tahunAjaranData]] = await db.query(
+      `
+      SELECT *
+      FROM tahun_ajaran
+      WHERE tahun_ajaran = ?
+      AND semester = ?
+      LIMIT 1
+      `,
+      [tahun_ajaran, semester],
+    );
+
+    if (!tahunAjaranData) {
+      return res.status(404).json({
+        message: "Tahun ajaran not found",
+      });
+    }
+
+    // =========================
+    // DETERMINE YEAR
+    // =========================
+
+    const tahunMulai = Number(tahun_ajaran.split("/")[0]);
+    const tahunSelesai = Number(tahun_ajaran.split("/")[1]);
+
+    const month = Number(bulan);
+    const year = semester === "Ganjil" ? tahunMulai : tahunSelesai;
+
+    const daysInMonth = new Date(year, month, 0).getDate();
+
+    const startDate = `${year}-${String(month).padStart(2, "0")}-01`;
+
+    const nextMonthDate =
+      month === 12
+        ? `${year + 1}-01-01`
+        : `${year}-${String(month + 1).padStart(2, "0")}-01`;
+
+    // DEBUG
+    // const tahunAjaranData = { id: 12 };
+    // const startDate = "2026-07-1";
+    // const nextMonthDate = "2026-08-1";
+    // const daysInMonth = new Date("2026", "07", 0).getDate();
+
+    // =========================
+    // FILTER
+    // =========================
+
+    let whereClause = `
+      WHERE sta.id_tahun_ajaran = ?
+    `;
+
+    const params = [tahunAjaranData.id];
+
+    if (kelas) {
+      whereClause += ` AND sta.kelas = ?`;
+      params.push(kelas);
+    }
+
+    // =========================
+    // DYNAMIC DAY COLUMN
+    // =========================
+
+    let selectDays = "";
+
+    for (let d = 1; d <= 31; d++) {
+      if (d <= daysInMonth) {
+        selectDays += `
+          MAX(
+            CASE
+              WHEN DAY(COALESCE(izin.tanggal, a.tanggal)) = ${d} THEN
+                CASE
+                  WHEN izin.status = 'sakit' THEN 'S'
+                  WHEN izin.status = 'izin' THEN 'I'
+                  WHEN a.hadir = 1 THEN 'H'
+                  ELSE 'A'
+                END
+            END
+          ) AS \`${d}\`,`;
+      } else {
+        selectDays += `NULL AS \`${d}\`,`;
+      }
+    }
+
+    // =========================
+    // QUERY
+    // =========================
+
+    const query = `
+      SELECT
+        s.nisn,
+        s.nama,
+        sta.kelas,
+        s.jenis_kelamin,
+
+        ${selectDays}
+
+        COALESCE(att.total_hadir,0) AS total_hadir,
+        COALESCE(iz.total_sakit,0) AS total_sakit,
+        COALESCE(iz.total_izin,0) AS total_izin,
+        COALESCE(att.total_terlambat,0) AS total_terlambat
+
+      FROM siswa s
+
+      JOIN siswa_tahun_ajaran sta
+        ON sta.id_siswa = s.id
+
+      /* Attendance per day */
+      LEFT JOIN (
+          SELECT
+              id_siswa,
+              id_tahun_ajaran,
+              DATE(created_at) AS tanggal,
+              1 AS hadir
+          FROM absensi
+          WHERE id_tahun_ajaran = ?
+            AND created_at >= ?
+            AND created_at < ?
+          GROUP BY
+              id_siswa,
+              id_tahun_ajaran,
+              DATE(created_at)
+      ) a
+          ON a.id_siswa = s.id
+        AND a.id_tahun_ajaran = sta.id_tahun_ajaran
+
+      /* Permission per day */
+      LEFT JOIN (
+          SELECT
+              id_siswa,
+              id_tahun_ajaran,
+              tanggal,
+              status
+          FROM perizinan_siswa
+          WHERE id_tahun_ajaran = ?
+            AND tanggal >= ?
+            AND tanggal < ?
+      ) izin
+          ON izin.id_siswa = s.id
+        AND izin.id_tahun_ajaran = sta.id_tahun_ajaran
+        AND izin.tanggal = a.tanggal
+
+      /* Attendance totals */
+      LEFT JOIN (
+          SELECT
+              id_siswa,
+              COUNT(DISTINCT CASE WHEN tipe_absensi IN ('datang', 'pulang') THEN DATE(created_at) END) AS total_hadir,
+              SUM(status = 'terlambat') AS total_terlambat
+          FROM absensi
+          WHERE id_tahun_ajaran = ?
+            AND created_at >= ?
+            AND created_at < ?
+          GROUP BY id_siswa
+      ) att
+          ON att.id_siswa = s.id
+
+      /* Permission totals */
+      LEFT JOIN (
+          SELECT
+              id_siswa,
+              SUM(status = 'izin') AS total_izin,
+              SUM(status = 'sakit') AS total_sakit
+          FROM perizinan_siswa
+          WHERE id_tahun_ajaran = ?
+            AND tanggal >= ?
+            AND tanggal < ?
+          GROUP BY id_siswa
+      ) iz
+          ON iz.id_siswa = s.id
+        
+      ${whereClause}
+
+      GROUP BY
+          s.id,
+          s.nisn,
+          s.nama,
+          sta.kelas,
+          s.jenis_kelamin,
+          att.total_hadir,
+          att.total_terlambat,
+          iz.total_izin,
+          iz.total_sakit
+
+      ORDER BY
+          sta.kelas,
+          s.nama;
+    `;
+
+    const [rows] = await db.query(query, [
+      // matrix
+      tahunAjaranData.id,
+      startDate,
+      nextMonthDate,
+
+      tahunAjaranData.id,
+      startDate,
+      nextMonthDate,
+
+      tahunAjaranData.id,
+      startDate,
+      nextMonthDate,
+
+      tahunAjaranData.id,
+      startDate,
+      nextMonthDate,
+
+      // filter
+      ...params,
+    ]);
+
+    return res.status(200).json({
+      message: "Success",
+      data: rows,
+    });
+  } catch (err) {
+    console.error(err);
+
+    return res.status(500).json({
+      message: err.message,
+    });
   }
 };
 

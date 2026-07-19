@@ -22,6 +22,7 @@ import * as PerizinanController from "./controllers/perizinan.controller.js";
 import * as HomeVisitController from "./controllers/home_visit.controller.js";
 import * as ConfigController from "./controllers/config.controller.js";
 import * as ExportImportController from "./controllers/exportImport.controller.js";
+import * as FilterController from "./controllers/filter.controller.js";
 
 // Initial Config
 if (!process.env.JWT_SECRET) {
@@ -79,6 +80,21 @@ router.delete(
   TahunAjaranController.deleteTahunAjaranById,
 );
 
+/* ===== Filter Routes ===== */
+router.get(
+  "/filter/kelas",
+  authMiddleware,
+  requireRole(["admin", "guru_bk", "kepala_sekolah"]),
+  FilterController.getAllKelas,
+);
+
+router.get(
+  "/filter/bulan",
+  authMiddleware,
+  requireRole(["admin", "guru_bk", "kepala_sekolah"]),
+  FilterController.getAllBulan,
+);
+
 /* ===== Users Routes ===== */
 
 router.get(
@@ -130,13 +146,6 @@ router.get(
   authMiddleware,
   requireRole(["admin", "guru_bk", "kepala_sekolah"]),
   SiswaController.getSiswa,
-);
-
-router.get(
-  "/siswa/kelas",
-  authMiddleware,
-  requireRole(["admin", "guru_bk", "kepala_sekolah"]),
-  SiswaController.getAllKelas,
 );
 
 router.post(
@@ -204,6 +213,13 @@ router.get(
   authMiddleware,
   requireRole(["admin", "guru_bk", "kepala_sekolah"]),
   RekapKehadiranController.getRekapKehadiran,
+);
+
+router.get(
+  "/rekap_kehadiran_bk",
+  authMiddleware,
+  requireRole(["admin", "guru_bk", "kepala_sekolah"]),
+  RekapKehadiranController.getRekapKehadiranBK,
 );
 
 router.post(
@@ -418,8 +434,8 @@ router.patch(
 /* ===== Export Import Routes ===== */
 router.get(
   "/export/absensi/excel",
-  authMiddleware,
-  requireRole(["admin", "guru_bk"]),
+  // authMiddleware,
+  // requireRole(["admin", "guru_bk"]),
   ExportImportController.exportRekapKehadiranExcel,
 );
 router.get(

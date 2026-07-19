@@ -210,18 +210,23 @@ export const exportRekapKehadiranExcel = async (req, res) => {
 
       let selectDays = "";
 
-      for (let d = 1; d <= daysInMonth; d++) {
-        selectDays += `
-          COALESCE(
+      for (let d = 1; d <= 31; d++) {
+        if (d <= daysInMonth) {
+          selectDays += `
             MAX(
               CASE
-                WHEN DAY(a.tanggal) = ${d}
-                THEN a.hadir
+                WHEN DAY(COALESCE(izin.tanggal, a.tanggal)) = ${d} THEN
+                  CASE
+                    WHEN izin.status = 'sakit' THEN 'S'
+                    WHEN izin.status = 'izin' THEN 'I'
+                    WHEN a.hadir = 1 THEN 'H'
+                    ELSE 'A'
+                  END
               END
-            ),
-            0
-          ) AS \`${d}\`,
-        `;
+            ) AS \`${d}\`,`;
+        } else {
+          selectDays += `NULL AS \`${d}\`,`;
+        }
       }
 
       // =========================
@@ -229,106 +234,104 @@ export const exportRekapKehadiranExcel = async (req, res) => {
       // =========================
 
       const query = `
-        SELECT
-          s.nisn,
-          s.nama,
-          s.jenis_kelamin,
-          sta.kelas,
-
-          ${selectDays}
-
-          COALESCE(att.total_hadir, 0) AS total_hadir,
-          COALESCE(att.total_terlambat, 0) AS total_terlambat,
-
-          COALESCE(iz.total_izin, 0) AS total_izin,
-          COALESCE(iz.total_sakit, 0) AS total_sakit,
-
-          COALESCE(pl.total_alpha, 0) AS total_alpha
-
-        FROM siswa s
-
-        JOIN siswa_tahun_ajaran sta
-          ON sta.id_siswa = s.id
-
-        LEFT JOIN (
-
           SELECT
-            id_siswa,
-            id_tahun_ajaran,
-            DATE(created_at) AS tanggal,
+            s.nisn,
+            s.nama,
+            sta.kelas,
+            s.jenis_kelamin,
 
-            CASE
-              WHEN COUNT(DISTINCT tipe_absensi) = 2
-              THEN 1
-              ELSE 0
-            END AS hadir
+            ${selectDays}
 
-          FROM absensi
+            COALESCE(att.total_hadir,0) AS total_hadir,
+            COALESCE(iz.total_sakit,0) AS total_sakit,
+            COALESCE(iz.total_izin,0) AS total_izin,
+            COALESCE(att.total_terlambat,0) AS total_terlambat
 
-          WHERE id_tahun_ajaran = ?
-            AND created_at >= ?
-            AND created_at < ?
+          FROM siswa s
+
+          JOIN siswa_tahun_ajaran sta
+            ON sta.id_siswa = s.id
+
+          /* Attendance per day */
+          LEFT JOIN (
+              SELECT
+                  id_siswa,
+                  id_tahun_ajaran,
+                  DATE(created_at) AS tanggal,
+                  1 AS hadir
+              FROM absensi
+              WHERE id_tahun_ajaran = ?
+                AND created_at >= ?
+                AND created_at < ?
+              GROUP BY
+                  id_siswa,
+                  id_tahun_ajaran,
+                  DATE(created_at)
+          ) a
+              ON a.id_siswa = s.id
+            AND a.id_tahun_ajaran = sta.id_tahun_ajaran
+
+          /* Permission per day */
+          LEFT JOIN (
+              SELECT
+                  id_siswa,
+                  id_tahun_ajaran,
+                  tanggal,
+                  status
+              FROM perizinan_siswa
+              WHERE id_tahun_ajaran = ?
+                AND tanggal >= ?
+                AND tanggal < ?
+          ) izin
+              ON izin.id_siswa = s.id
+            AND izin.id_tahun_ajaran = sta.id_tahun_ajaran
+            AND izin.tanggal = a.tanggal
+
+          /* Attendance totals */
+          LEFT JOIN (
+              SELECT
+                  id_siswa,
+                  COUNT(DISTINCT CASE WHEN tipe_absensi IN ('datang', 'pulang') THEN DATE(created_at) END) AS total_hadir,
+                  SUM(status = 'terlambat') AS total_terlambat
+              FROM absensi
+              WHERE id_tahun_ajaran = ?
+                AND created_at >= ?
+                AND created_at < ?
+              GROUP BY id_siswa
+          ) att
+              ON att.id_siswa = s.id
+
+          /* Permission totals */
+          LEFT JOIN (
+              SELECT
+                  id_siswa,
+                  SUM(status = 'izin') AS total_izin,
+                  SUM(status = 'sakit') AS total_sakit
+              FROM perizinan_siswa
+              WHERE id_tahun_ajaran = ?
+                AND tanggal >= ?
+                AND tanggal < ?
+              GROUP BY id_siswa
+          ) iz
+              ON iz.id_siswa = s.id
+            
+          ${whereClause}
 
           GROUP BY
-            id_siswa,
-            id_tahun_ajaran,
-            DATE(created_at)
+              s.id,
+              s.nisn,
+              s.nama,
+              sta.kelas,
+              s.jenis_kelamin,
+              att.total_hadir,
+              att.total_terlambat,
+              iz.total_izin,
+              iz.total_sakit
 
-        ) a
-          ON a.id_siswa = s.id
-          AND a.id_tahun_ajaran = sta.id_tahun_ajaran
-
-        LEFT JOIN (
-          SELECT
-            id_siswa,
-            SUM(CASE WHEN tipe_absensi = 'pulang' THEN 1 ELSE 0 END) AS total_hadir,
-            SUM(status = 'terlambat') AS total_terlambat
-          FROM absensi
-          WHERE id_tahun_ajaran = ?
-            AND created_at >= ?
-            AND created_at < ?
-          GROUP BY id_siswa
-        ) att
-          ON att.id_siswa = s.id
-
-        LEFT JOIN (
-          SELECT
-            id_siswa,
-            SUM(status = 'izin') AS total_izin,
-            SUM(status = 'sakit') AS total_sakit
-          FROM perizinan_siswa
-          WHERE id_tahun_ajaran = ?
-            AND tanggal >= ?
-            AND tanggal < ?
-          GROUP BY id_siswa
-        ) iz
-          ON iz.id_siswa = s.id
-
-        LEFT JOIN (
-          SELECT
-            id_siswa,
-            SUM(id_jenis_pelanggaran = 1) AS total_alpha
-          FROM pelanggaran_siswa
-          WHERE id_tahun_ajaran = ?
-            AND tanggal >= ?
-            AND tanggal < ?
-          GROUP BY id_siswa
-        ) pl
-          ON pl.id_siswa = s.id
-
-        ${whereClause}
-
-        GROUP BY
-          s.id,
-          s.nisn,
-          s.nama,
-          s.jenis_kelamin,
-          sta.kelas
-
-        ORDER BY
-          sta.kelas ASC,
-          s.nama ASC
-      `;
+          ORDER BY
+              sta.kelas,
+              s.nama;
+        `;
 
       const [rows] = await db.query(query, [
         // attendance matrix
@@ -495,7 +498,7 @@ export const exportRekapKehadiranExcel = async (req, res) => {
 
         // tanggal
         for (let d = 1; d <= daysInMonth; d++) {
-          rowData.push(row[d] ?? 0);
+          rowData.push(row[d] ?? "-");
         }
 
         // jumlah
@@ -541,7 +544,7 @@ export const exportRekapKehadiranExcel = async (req, res) => {
     await workbook.xlsx.write(res);
     res.end();
   } catch (err) {
-    console.error(error);
+    console.error(err);
     res.status(500).json({ message: "Server error" });
   }
 };
