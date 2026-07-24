@@ -4,7 +4,7 @@ import db from "../lib/database.js";
 export const getAllTahunAjaran = async (req, res) => {
   try {
     const [rows] = await db.query(
-      "SELECT * FROM tahun_ajaran ORDER BY tahun_ajaran DESC",
+      "SELECT * FROM tahun_ajaran ORDER BY id DESC",
     );
 
     res.json(rows);
@@ -210,6 +210,7 @@ export const createNextTahunAjaranAndPromoteStudents = async (req, res) => {
   }
 };
 
+// NOTE: THIS FUNCTION MUST NOT RUN ALONE, it must run after new tahun ajaran have been made due to this function reading second latest tahun ajaran
 const promoteSiswaToNewAcademicYear = async (
   connection,
   newTahunAjaranId,
@@ -218,23 +219,19 @@ const promoteSiswaToNewAcademicYear = async (
   /* GET LATEST ENROLLMENTS */
   const [rows] = await connection.query(`
     SELECT
-      sta.id_siswa,
-      sta.kelas
-
+        sta.id_siswa,
+        sta.kelas
     FROM siswa_tahun_ajaran sta
-
-    INNER JOIN (
-      SELECT
-        id_siswa,
-        MAX(id_tahun_ajaran) AS latest_tahun
-
-      FROM siswa_tahun_ajaran
-
-      GROUP BY id_siswa
-    ) latest
-      ON latest.id_siswa = sta.id_siswa
-      AND latest.latest_tahun = sta.id_tahun_ajaran
+    JOIN (
+        SELECT id AS previous_tahun
+        FROM tahun_ajaran
+        ORDER BY id DESC
+        LIMIT 1 OFFSET 1
+    ) ta
+    ON sta.id_tahun_ajaran = ta.previous_tahun;
   `);
+
+  console.log("LENGTH ", rows.length);
 
   const insertValues = [];
 
