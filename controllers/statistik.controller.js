@@ -74,24 +74,35 @@ export const getAllStatistics = async (req, res) => {
     // [7] 10 Siswa Paling Rajin Tepat Waktu (Bulan Ini)
     const [siswaRajin] = await db.query(
       `SELECT
-        s.id,
-        s.nama,
-        sta.kelas,
-        COUNT(*) AS total_tepat_waktu,
-        SEC_TO_TIME(AVG(TIME_TO_SEC(TIME(a.created_at)))) AS rata_rata_datang
-      FROM absensi a
-      JOIN siswa s ON s.id = a.id_siswa
+          s.id,
+          s.nama,
+          sta.kelas,
+          COUNT(*) AS total_tepat_waktu,
+          SEC_TO_TIME(
+              AVG(TIME_TO_SEC(TIME(x.first_created_at)))
+          ) AS rata_rata_datang
+      FROM (
+          SELECT
+              id_siswa,
+              DATE(created_at) AS tanggal,
+              MIN(created_at) AS first_created_at
+          FROM absensi
+          WHERE status = 'tepat waktu'
+            AND id_tahun_ajaran = ?
+            AND MONTH(created_at) = MONTH(CURDATE())
+            AND YEAR(created_at) = YEAR(CURDATE())
+          GROUP BY id_siswa, DATE(created_at)
+      ) x
+      JOIN siswa s
+          ON s.id = x.id_siswa
       JOIN siswa_tahun_ajaran sta
-        ON sta.id_siswa = s.id
-        AND sta.id_tahun_ajaran = a.id_tahun_ajaran
-      WHERE MONTH(a.created_at) = MONTH(CURDATE())
-        AND YEAR(a.created_at) = YEAR(CURDATE())
-        AND a.status = 'tepat waktu'
-        AND sta.id_tahun_ajaran = ?
+          ON sta.id_siswa = s.id
+          AND sta.id_tahun_ajaran = ?
       GROUP BY s.id, s.nama, sta.kelas
-      ORDER BY total_tepat_waktu DESC, rata_rata_datang ASC
-      LIMIT 10`,
-      [id_tahun_ajaran],
+      ORDER BY COUNT(*) DESC,
+              AVG(TIME_TO_SEC(TIME(x.first_created_at))) ASC
+      LIMIT 10;`,
+      [id_tahun_ajaran, id_tahun_ajaran],
     );
 
     res.json({
