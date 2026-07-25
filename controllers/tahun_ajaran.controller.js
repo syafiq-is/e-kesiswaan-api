@@ -127,11 +127,11 @@ export const createNextTahunAjaranAndPromoteStudents = async (req, res) => {
   try {
     await connection.beginTransaction();
 
-    /* GET CURRENT ACTIVE */
+    /* GET LATEST TAHUN AJARAN */
     const [activeRows] = await connection.query(`
       SELECT *
       FROM tahun_ajaran
-      WHERE status = 'aktif'
+      WHERE id = (SELECT MAX(id) FROM tahun_ajaran)
       LIMIT 1
     `);
 
