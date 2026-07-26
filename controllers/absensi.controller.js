@@ -397,46 +397,30 @@ export const flagUnattendedAsAlpha = async (req, res) => {
       });
     }
 
-    /*
-      CONDITIONS:
-
-      1. Tidak absensi datang sampai batas akhir pulang
-      2. Datang tapi tidak pulang
-      3. Tidak punya izin/sakit hari ini
-    */
-
     const [students] = await db.query(
       `
-      SELECT
-        s.id AS id_siswa
-      FROM siswa s
+        SELECT 
+            sta.id_siswa
+        FROM siswa_tahun_ajaran sta
+        JOIN siswa s 
+            ON s.id = sta.id_siswa
 
-      /* CHECK IZIN TODAY */
-      LEFT JOIN perizinan_siswa ps
-        ON ps.id_siswa = s.id
-        AND ps.tanggal = CURDATE()
+        -- 1. Join permissions for today
+        LEFT JOIN perizinan_siswa ps 
+            ON ps.id_siswa = s.id 
+          AND ps.tanggal = CURDATE()
 
-      /* CHECK DATANG */
-      LEFT JOIN absensi datang
-        ON datang.id_siswa = s.id
-        AND datang.tipe_absensi = 'datang'
-        AND DATE(datang.created_at) = CURDATE()
+        -- 2. Join check-in/check-out records for today
+        LEFT JOIN absensi a 
+            ON a.id_siswa = s.id 
+          AND a.tipe_absensi IN ('datang', 'pulang')
+          AND DATE(a.created_at) = CURDATE() 
 
-      /* CHECK PULANG */
-      LEFT JOIN absensi pulang
-        ON pulang.id_siswa = s.id
-        AND pulang.tipe_absensi = 'pulang'
-        AND DATE(pulang.created_at) = CURDATE()
-
-      WHERE
-        ps.id IS NULL
-        AND (
-          datang.id IS NULL
-          OR (
-            datang.id IS NOT NULL
-            AND pulang.id IS NULL
-          )
-        )
+        WHERE sta.id_tahun_ajaran = 12
+          -- Student has NO permission today
+          AND ps.id IS NULL 
+          -- Student has NO attendance today
+          AND a.id IS NULL;
       `,
     );
 
