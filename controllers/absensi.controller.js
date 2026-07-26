@@ -221,6 +221,29 @@ export const createAbsensi = async (req, res) => {
         [id_siswa, tahun_ajaran_aktif[0].id, tipe_absensi, status],
       );
 
+      if (status === "terlambat") {
+        const today = new Date().toISOString().split("T")[0];
+
+        await db.query(
+          `
+          INSERT INTO pelanggaran_siswa (
+            id_siswa, 
+            id_tahun_ajaran, 
+            id_jenis_pelanggaran, 
+            tanggal, 
+            keterangan
+          ) VALUES (?, ?, ?, ?, ?)
+          `,
+          [
+            id_siswa,
+            tahun_ajaran_aktif[0].id,
+            2,
+            today,
+            "Terlambat ditandai oleh sistem",
+          ],
+        );
+      }
+
       return res.status(201).json({
         message: "Absensi datang created successfully",
       });
