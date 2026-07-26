@@ -458,90 +458,188 @@ export const getDataKehadiran = async (req, res) => {
   try {
     const { tahun_ajaran, semester, tingkat, kelas, search, date } = req.query;
 
-    if (!tahun_ajaran || !semester) {
-      return res.status(400).json({ message: "Required fields missing" });
+    if (!tahun_ajaran || !semester || !date) {
+      return res.status(400).json({
+        message: "tahun_ajaran, semester and date are required",
+      });
     }
 
-    let params = [];
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+      return res.status(400).json({
+        message: "Invalid date format (YYYY-MM-DD)",
+      });
+    }
+
+    // Get late configuration
+    const [[config]] = await db.query(`
+      SELECT
+        MAX(
+          CASE
+            WHEN config_key = 'jam_terlambat'
+            THEN config_value
+          END
+        ) AS jam_terlambat
+      FROM config
+    `);
 
     let sql = `
       SELECT
           s.nama,
           sta.kelas,
 
-          MAX(CASE WHEN a.tipe_absensi = 'datang' THEN TIME(a.created_at) END) AS jam_datang,
-          MAX(CASE WHEN a.tipe_absensi = 'pulang' THEN TIME(a.created_at) END) AS jam_pulang,
+          MIN(
+              CASE
+                  WHEN a.tipe_absensi = 'datang'
+                  THEN TIME(a.created_at)
+              END
+          ) AS jam_datang,
+
+          MAX(
+              CASE
+                  WHEN a.tipe_absensi = 'pulang'
+                  THEN TIME(a.created_at)
+              END
+          ) AS jam_pulang,
+
 
           CASE
-              WHEN MAX(CASE WHEN a.tipe_absensi IN ('datang','pulang') THEN 1 END) IS NOT NULL
-                  THEN 'hadir'
+              /* Izin / Sakit highest priority */
+              WHEN MAX(
+                  CASE
+                      WHEN izin.status IN ('izin','sakit')
+                      THEN izin.status
+                  END
+              ) IS NOT NULL
 
-              WHEN MAX(CASE WHEN ps.id_jenis_pelanggaran = 1 THEN 1 END) IS NOT NULL
-                  THEN 'alfa'
+              THEN MAX(
+                  CASE
+                      WHEN izin.status IN ('izin','sakit')
+                      THEN izin.status
+                  END
+              )
 
-              ELSE 'belum absen'
+              /* System generated alpha */
+              WHEN MAX(alpha.id) IS NOT NULL
+              THEN 'alpha'
+
+              /* Late */
+              WHEN TIME(
+                  MIN(
+                      CASE
+                          WHEN a.tipe_absensi = 'datang'
+                          THEN a.created_at
+                      END
+                  )
+              ) > ?
+              THEN 'terlambat'
+
+              /* No attendance yet */
+              WHEN MIN(
+                  CASE
+                      WHEN a.tipe_absensi = 'datang'
+                      THEN a.created_at
+                  END
+              ) IS NULL
+              THEN 'belum absen'
+
+              ELSE 'hadir'
+
           END AS status
 
       FROM siswa s
-      JOIN siswa_tahun_ajaran sta ON sta.id_siswa = s.id
-      JOIN tahun_ajaran ta ON ta.id = sta.id_tahun_ajaran
+
+      JOIN siswa_tahun_ajaran sta
+          ON sta.id_siswa = s.id
+
+      JOIN tahun_ajaran ta
+          ON ta.id = sta.id_tahun_ajaran
 
       LEFT JOIN absensi a
-        ON a.id_siswa = s.id
+          ON a.id_siswa = s.id
+          AND a.created_at >= ?
+          AND a.created_at < DATE_ADD(?, INTERVAL 1 DAY)
+
+      LEFT JOIN perizinan_siswa izin
+          ON izin.id_siswa = s.id
+          AND izin.id_tahun_ajaran = ta.id
+          AND izin.tanggal = ?
+
+      LEFT JOIN pelanggaran_siswa alpha
+          ON alpha.id_siswa = s.id
+          AND alpha.id_tahun_ajaran = ta.id
+          AND alpha.id_jenis_pelanggaran = 1
+          AND alpha.tanggal = ?
     `;
-
-    // DATE FILTER (ABSENSI JOIN SAFE)
-    if (date) {
-      if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
-        return res.status(400).json({ message: "Invalid date format" });
-      }
-
-      sql += `
-        AND a.created_at >= ?
-        AND a.created_at < DATE_ADD(?, INTERVAL 1 DAY)
-      `;
-
-      params.push(date, date);
-    }
-
-    sql += `
-      LEFT JOIN pelanggaran_siswa ps
-        ON ps.id_siswa = s.id
-        AND ps.id_tahun_ajaran = ta.id
-        AND ps.id_jenis_pelanggaran = 1
-    `;
-
-    if (date) {
-      sql += ` AND DATE(ps.tanggal) = ? `;
-      params.push(date);
-    }
 
     sql += `
       WHERE ta.tahun_ajaran = ?
-        AND ta.semester = ?
+      AND ta.semester = ?
     `;
 
-    params.push(tahun_ajaran, semester);
-
     if (tingkat) {
-      sql += ` AND sta.kelas LIKE ? `;
-      params.push(`%${tingkat}%`);
+      sql += ` AND sta.kelas LIKE ?`;
     }
 
     if (kelas) {
-      sql += ` AND sta.kelas = ? `;
+      sql += ` AND sta.kelas = ?`;
+    }
+
+    if (search) {
+      sql += `
+        AND (
+          s.nama LIKE ?
+          OR s.nisn LIKE ?
+        )
+      `;
+    }
+
+    sql += `
+      GROUP BY
+          s.id,
+          s.nama,
+          sta.kelas
+
+      ORDER BY
+          sta.kelas,
+          s.nama
+    `;
+
+    /*
+      Placeholder order:
+
+      1  jam_terlambat
+      2  absensi start date
+      3  absensi end date
+      4  izin date
+      5  alpha date
+      6  tahun_ajaran
+      7  semester
+
+      optional filters afterwards
+    */
+
+    const params = [
+      config.jam_terlambat,
+      date,
+      date,
+      date,
+      date,
+      tahun_ajaran,
+      semester,
+    ];
+
+    if (tingkat) {
+      params.push(`${tingkat}%`);
+    }
+
+    if (kelas) {
       params.push(kelas);
     }
 
     if (search) {
-      sql += ` AND (s.nama LIKE ? OR s.nisn LIKE ?) `;
-      params.push(`%${search}%`, `%${search}%`);
+      params.push(`%${search}%`);
+      params.push(`%${search}%`);
     }
-
-    sql += `
-      GROUP BY s.id, s.nama, sta.kelas
-      ORDER BY sta.kelas, s.nama
-    `;
 
     const [rows] = await db.query(sql, params);
 
