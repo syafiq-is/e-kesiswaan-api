@@ -269,12 +269,6 @@ export const getRekapKehadiranBK = async (req, res) => {
         ? `${year + 1}-01-01`
         : `${year}-${String(month + 1).padStart(2, "0")}-01`;
 
-    // DEBUG
-    // const tahunAjaranData = { id: 12 };
-    // const startDate = "2026-07-1";
-    // const nextMonthDate = "2026-08-1";
-    // const daysInMonth = new Date("2026", "07", 0).getDate();
-
     // =========================
     // FILTER
     // =========================
@@ -298,18 +292,33 @@ export const getRekapKehadiranBK = async (req, res) => {
 
     for (let d = 1; d <= 31; d++) {
       if (d <= daysInMonth) {
+        // Use this for Hadir = 'H'
+        // selectDays += `
+        //   MAX(
+        //       CASE
+        //           WHEN DAY(daily.tanggal) = ${d} THEN
+        //               CASE
+        //                   WHEN daily.sakit = 1 THEN 'S'
+        //                   WHEN daily.izin = 1 THEN 'I'
+        //                   WHEN daily.alpha = 1 THEN 'A'
+        //                   WHEN daily.hadir = 1 THEN 'H'
+        //               END
+        //       END
+        //   ) AS \`${d}\`,`;
         selectDays += `
-          MAX(
-            CASE
-              WHEN DAY(COALESCE(izin.tanggal, a.tanggal)) = ${d} THEN
+            MAX(
                 CASE
-                  WHEN izin.status = 'sakit' THEN 'S'
-                  WHEN izin.status = 'izin' THEN 'I'
-                  WHEN a.hadir = 1 THEN 'H'
-                  ELSE 'A'
+                    WHEN DAY(daily.tanggal) = ${d} THEN
+                        CASE
+                            WHEN daily.sakit = 1 THEN 'S'
+                            WHEN daily.izin = 1 THEN 'I'
+                            WHEN daily.alpha = 1 THEN 'A'
+                            WHEN daily.hadir = 1 THEN TIME_FORMAT(daily.jam_datang, '%H:%i')
+                            ELSE NULL
+                        END
                 END
-            END
-          ) AS \`${d}\`,`;
+            ) AS \`${d}\`,
+        `;
       } else {
         selectDays += `NULL AS \`${d}\`,`;
       }
@@ -320,111 +329,133 @@ export const getRekapKehadiranBK = async (req, res) => {
     // =========================
 
     const query = `
-      SELECT
+    SELECT
         s.nisn,
         s.nama,
         sta.kelas,
         s.jenis_kelamin,
 
+        MAX(daily.jam_datang) AS jam_datang,
+
         ${selectDays}
 
-        COALESCE(att.total_hadir,0) AS total_hadir,
-        COALESCE(iz.total_sakit,0) AS total_sakit,
-        COALESCE(iz.total_izin,0) AS total_izin,
-        COALESCE(att.total_terlambat,0) AS total_terlambat
+        SUM(daily.hadir) AS total_hadir,
+        SUM(daily.terlambat) AS total_terlambat,
+        SUM(daily.izin) AS total_izin,
+        SUM(daily.sakit) AS total_sakit,
+        SUM(daily.alpha) AS total_alpha
 
-      FROM siswa s
+    FROM siswa s
 
-      JOIN siswa_tahun_ajaran sta
+    JOIN siswa_tahun_ajaran sta
         ON sta.id_siswa = s.id
 
-      /* Attendance per day */
-      LEFT JOIN (
-          SELECT
-              id_siswa,
-              id_tahun_ajaran,
-              DATE(created_at) AS tanggal,
-              1 AS hadir
-          FROM absensi
-          WHERE id_tahun_ajaran = ?
-            AND created_at >= ?
-            AND created_at < ?
-          GROUP BY
-              id_siswa,
-              id_tahun_ajaran,
-              DATE(created_at)
-      ) a
-          ON a.id_siswa = s.id
-        AND a.id_tahun_ajaran = sta.id_tahun_ajaran
+    LEFT JOIN (
+        SELECT
+            x.id_siswa,
+            x.id_tahun_ajaran,
+            x.tanggal,
 
-      /* Permission per day */
-      LEFT JOIN (
-          SELECT
-              id_siswa,
-              id_tahun_ajaran,
-              tanggal,
-              status
-          FROM perizinan_siswa
-          WHERE id_tahun_ajaran = ?
-            AND tanggal >= ?
-            AND tanggal < ?
-      ) izin
-          ON izin.id_siswa = s.id
-        AND izin.id_tahun_ajaran = sta.id_tahun_ajaran
-        AND izin.tanggal = a.tanggal
+            MAX(x.jam_datang) AS jam_datang,
+            MAX(x.hadir) AS hadir,
+            MAX(x.terlambat) AS terlambat,
+            MAX(x.izin) AS izin,
+            MAX(x.sakit) AS sakit,
+            MAX(x.alpha) AS alpha
 
-      /* Attendance totals */
-      LEFT JOIN (
-          SELECT
-              id_siswa,
-              COUNT(DISTINCT CASE WHEN tipe_absensi IN ('datang', 'pulang') THEN DATE(created_at) END) AS total_hadir,
-              SUM(status = 'terlambat') AS total_terlambat
-          FROM absensi
-          WHERE id_tahun_ajaran = ?
-            AND created_at >= ?
-            AND created_at < ?
-          GROUP BY id_siswa
-      ) att
-          ON att.id_siswa = s.id
+        FROM (
 
-      /* Permission totals */
-      LEFT JOIN (
-          SELECT
-              id_siswa,
-              SUM(status = 'izin') AS total_izin,
-              SUM(status = 'sakit') AS total_sakit
-          FROM perizinan_siswa
-          WHERE id_tahun_ajaran = ?
-            AND tanggal >= ?
-            AND tanggal < ?
-          GROUP BY id_siswa
-      ) iz
-          ON iz.id_siswa = s.id
-        
-      ${whereClause}
+            /* Attendance */
+            SELECT
+                id_siswa,
+                id_tahun_ajaran,
+                DATE(created_at) AS tanggal,
+                TIME(MIN(created_at)) AS jam_datang,
+                1 AS hadir,
+                MAX(status='terlambat') AS terlambat,
+                0 AS izin,
+                0 AS sakit,
+                0 AS alpha
 
-      GROUP BY
-          s.id,
-          s.nisn,
-          s.nama,
-          sta.kelas,
-          s.jenis_kelamin,
-          att.total_hadir,
-          att.total_terlambat,
-          iz.total_izin,
-          iz.total_sakit
+            FROM absensi
 
-      ORDER BY
-          sta.kelas,
-          s.nama;
+            WHERE id_tahun_ajaran = ?
+              AND created_at >= ?
+              AND created_at < ?
+
+            GROUP BY
+                id_siswa,
+                id_tahun_ajaran,
+                DATE(created_at)
+
+            UNION ALL
+
+            /* Permission */
+            SELECT
+                id_siswa,
+                id_tahun_ajaran,
+                tanggal,
+                NULL AS jam_datang,
+                0,
+                0,
+                status='izin',
+                status='sakit',
+                0
+
+            FROM perizinan_siswa
+
+            WHERE id_tahun_ajaran = ?
+              AND tanggal >= ?
+              AND tanggal < ?
+
+            UNION ALL
+
+            /* Alpha */
+            SELECT
+                id_siswa,
+                id_tahun_ajaran,
+                tanggal,
+                NULL AS jam_datang,
+                0,
+                0,
+                0,
+                0,
+                1
+
+            FROM pelanggaran_siswa
+
+            WHERE id_tahun_ajaran = ?
+              AND id_jenis_pelanggaran = 1
+              AND tanggal >= ?
+              AND tanggal < ?
+
+        ) x
+
+        GROUP BY
+            x.id_siswa,
+            x.id_tahun_ajaran,
+            x.tanggal
+
+    ) daily
+        ON daily.id_siswa = s.id
+      AND daily.id_tahun_ajaran = sta.id_tahun_ajaran
+
+    ${whereClause}
+
+    GROUP BY
+        s.id,
+        s.nisn,
+        s.nama,
+        sta.kelas,
+        s.jenis_kelamin
+
+    ORDER BY
+        sta.kelas,
+        s.nama;
     `;
 
     const [rows] = await db.query(query, [
       // matrix
-      tahunAjaranData.id,
-      startDate,
-      nextMonthDate,
-
       tahunAjaranData.id,
       startDate,
       nextMonthDate,
@@ -456,7 +487,8 @@ export const getRekapKehadiranBK = async (req, res) => {
 
 export const getDataKehadiran = async (req, res) => {
   try {
-    const { tahun_ajaran, semester, tingkat, kelas, search, date } = req.query;
+    const { tahun_ajaran, semester, tingkat, kelas, search, date, status } =
+      req.query;
 
     if (!tahun_ajaran || !semester || !date) {
       return res.status(400).json({
@@ -469,18 +501,6 @@ export const getDataKehadiran = async (req, res) => {
         message: "Invalid date format (YYYY-MM-DD)",
       });
     }
-
-    // Get late configuration
-    const [[config]] = await db.query(`
-      SELECT
-        MAX(
-          CASE
-            WHEN config_key = 'jam_terlambat'
-            THEN config_value
-          END
-        ) AS jam_terlambat
-      FROM config
-    `);
 
     let sql = `
       SELECT
@@ -523,14 +543,13 @@ export const getDataKehadiran = async (req, res) => {
               THEN 'alpha'
 
               /* Late */
-              WHEN TIME(
-                  MIN(
-                      CASE
-                          WHEN a.tipe_absensi = 'datang'
-                          THEN a.created_at
-                      END
-                  )
-              ) > ?
+              WHEN MAX(
+                  CASE
+                      WHEN a.tipe_absensi = 'datang'
+                          AND a.status = 'terlambat'
+                      THEN a.status
+                  END
+              ) IS NOT NULL
               THEN 'terlambat'
 
               /* No attendance yet */
@@ -569,39 +588,9 @@ export const getDataKehadiran = async (req, res) => {
           AND alpha.id_tahun_ajaran = ta.id
           AND alpha.id_jenis_pelanggaran = 1
           AND alpha.tanggal = ?
-    `;
 
-    sql += `
       WHERE ta.tahun_ajaran = ?
       AND ta.semester = ?
-    `;
-
-    if (tingkat) {
-      sql += ` AND sta.kelas LIKE ?`;
-    }
-
-    if (kelas) {
-      sql += ` AND sta.kelas = ?`;
-    }
-
-    if (search) {
-      sql += `
-        AND (
-          s.nama LIKE ?
-          OR s.nisn LIKE ?
-        )
-      `;
-    }
-
-    sql += `
-      GROUP BY
-          s.id,
-          s.nama,
-          sta.kelas
-
-      ORDER BY
-          sta.kelas,
-          s.nama
     `;
 
     /*
@@ -618,27 +607,48 @@ export const getDataKehadiran = async (req, res) => {
       optional filters afterwards
     */
 
-    const params = [
-      config.jam_terlambat,
-      date,
-      date,
-      date,
-      date,
-      tahun_ajaran,
-      semester,
-    ];
+    const params = [date, date, date, date, tahun_ajaran, semester];
 
     if (tingkat) {
+      sql += ` AND sta.kelas LIKE ?`;
       params.push(`${tingkat}%`);
     }
 
     if (kelas) {
+      sql += ` AND sta.kelas = ?`;
       params.push(kelas);
     }
 
     if (search) {
+      sql += `
+        AND (
+          s.nama LIKE ?
+          OR s.nisn LIKE ?
+        )
+      `;
       params.push(`%${search}%`);
       params.push(`%${search}%`);
+    }
+
+    sql += `
+      GROUP BY
+          s.id,
+          s.nama,
+          sta.kelas
+
+      ORDER BY
+          sta.kelas,
+          s.nama
+    `;
+
+    if (status) {
+      const newSql = `
+        SELECT *
+        FROM (${sql}) AS result
+        WHERE result.status = ?
+      `;
+      sql = newSql;
+      params.push(status);
     }
 
     const [rows] = await db.query(sql, params);
